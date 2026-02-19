@@ -5,7 +5,9 @@
       "name": "Launch Aspire AppHost",
       "type": "dotnet",
       "request": "launch",
-      "projectPath": "${workspaceFolder}/src/utctux.AppHost/utctux.AppHost.csproj",
+      // "projectPath": "${workspaceFolder}/src/utctux.AppHost/utctux.AppHost.csproj",
+      "command": "aspire run",
+      "cwd": "${workspaceFolder}/src/utctux.AppHost",
       "preLaunchTask": "build"
     }
   ]

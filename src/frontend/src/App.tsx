@@ -1,184 +1,204 @@
-import { useState, useEffect } from 'react'
-import aspireLogo from '/Aspire.png'
-import './App.css'
+import { useState, useEffect, useMemo } from "react";
+import { Header, TitleSize } from "azure-devops-ui/Header";
+import { Card } from "azure-devops-ui/Card";
+import {
+  Table,
+  SimpleTableCell,
+} from "azure-devops-ui/Table";
+import type { ITableColumn } from "azure-devops-ui/Table";
+import { ObservableValue } from "azure-devops-ui/Core/Observable";
+import { ArrayItemProvider } from "azure-devops-ui/Utilities/Provider";
+import { Spinner, SpinnerSize } from "azure-devops-ui/Spinner";
+import { ZeroData, ZeroDataActionType } from "azure-devops-ui/ZeroData";
+import {
+  MessageCard,
+  MessageCardSeverity,
+} from "azure-devops-ui/MessageCard";
+import { Toggle } from "azure-devops-ui/Toggle";
+import type { IHeaderCommandBarItem } from "azure-devops-ui/HeaderCommandBar";
 
 interface WeatherForecast {
-  date: string
-  temperatureC: number
-  temperatureF: number
-  summary: string
+  date: string;
+  temperatureC: number;
+  temperatureF: number;
+  summary: string;
+}
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function App() {
-  const [weatherData, setWeatherData] = useState<WeatherForecast[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [useCelsius, setUseCelsius] = useState(false)
+  const [weatherData, setWeatherData] = useState<WeatherForecast[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [useCelsius, setUseCelsius] = useState(false);
 
   const fetchWeatherForecast = async () => {
-    setLoading(true)
-    setError(null)
-    
+    setLoading(true);
+    setError(null);
     try {
-      const response = await fetch('/api/weatherforecast')
-      
+      const response = await fetch("/api/weatherforecast");
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      const data: WeatherForecast[] = await response.json()
-      setWeatherData(data)
+      const data: WeatherForecast[] = await response.json();
+      setWeatherData(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch weather data')
-      console.error('Error fetching weather forecast:', err)
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch weather data"
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchWeatherForecast()
-  }, [])
+    fetchWeatherForecast();
+  }, []);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(undefined, { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    })
-  }
+  const columns: ITableColumn<WeatherForecast>[] = useMemo(
+    () => [
+      {
+        id: "date",
+        name: "Date",
+        width: new ObservableValue(-30),
+        renderCell: (
+          _rowIndex: number,
+          columnIndex: number,
+          tableColumn: ITableColumn<WeatherForecast>,
+          item: WeatherForecast
+        ) => (
+          <SimpleTableCell
+            columnIndex={columnIndex}
+            tableColumn={tableColumn}
+            key={columnIndex}
+          >
+            <span>{formatDate(item.date)}</span>
+          </SimpleTableCell>
+        ),
+      },
+      {
+        id: "summary",
+        name: "Summary",
+        width: new ObservableValue(-40),
+        renderCell: (
+          _rowIndex: number,
+          columnIndex: number,
+          tableColumn: ITableColumn<WeatherForecast>,
+          item: WeatherForecast
+        ) => (
+          <SimpleTableCell
+            columnIndex={columnIndex}
+            tableColumn={tableColumn}
+            key={columnIndex}
+          >
+            <span>{item.summary}</span>
+          </SimpleTableCell>
+        ),
+      },
+      {
+        id: "temperature",
+        name: useCelsius ? "Temp (°C)" : "Temp (°F)",
+        width: new ObservableValue(-30),
+        renderCell: (
+          _rowIndex: number,
+          columnIndex: number,
+          tableColumn: ITableColumn<WeatherForecast>,
+          item: WeatherForecast
+        ) => (
+          <SimpleTableCell
+            columnIndex={columnIndex}
+            tableColumn={tableColumn}
+            key={columnIndex}
+          >
+            <span className="font-weight-semibold">
+              {useCelsius ? item.temperatureC : item.temperatureF}°
+            </span>
+          </SimpleTableCell>
+        ),
+      },
+    ],
+    [useCelsius]
+  );
+
+  const itemProvider = useMemo(
+    () => new ArrayItemProvider<WeatherForecast>(weatherData),
+    [weatherData]
+  );
+
+  const commandBarItems: IHeaderCommandBarItem[] = [
+    {
+      id: "refresh",
+      text: "Refresh",
+      iconProps: { iconName: "Refresh" },
+      onActivate: () => { fetchWeatherForecast(); },
+      important: true,
+      disabled: loading,
+    },
+  ];
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <a 
-          href="https://aspire.dev" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          aria-label="Visit Aspire website (opens in new tab)"
-          className="logo-link"
-        >
-          <img src={aspireLogo} className="logo" alt="Aspire logo" />
-        </a>
-        <h1 className="app-title">Aspire Starter</h1>
-        <p className="app-subtitle">Modern distributed application development</p>
-      </header>
+    <div className="flex-grow flex-column">
+      <Header
+        title="Weather Forecast"
+        titleSize={TitleSize.Large}
+        commandBarItems={commandBarItems}
+      />
 
-      <main className="main-content">
-        <section className="weather-section" aria-labelledby="weather-heading">
-          <div className="card">
-            <div className="section-header">
-              <h2 id="weather-heading" className="section-title">Weather Forecast</h2>
-              <div className="header-actions">
-                <fieldset className="toggle-switch" aria-label="Temperature unit selection">
-                  <legend className="visually-hidden">Temperature unit</legend>
-                  <button 
-                    className={`toggle-option ${!useCelsius ? 'active' : ''}`}
-                    onClick={() => setUseCelsius(false)}
-                    aria-pressed={!useCelsius}
-                    type="button"
-                  >
-                    <span aria-hidden="true">°F</span>
-                    <span className="visually-hidden">Fahrenheit</span>
-                  </button>
-                  <button 
-                    className={`toggle-option ${useCelsius ? 'active' : ''}`}
-                    onClick={() => setUseCelsius(true)}
-                    aria-pressed={useCelsius}
-                    type="button"
-                  >
-                    <span aria-hidden="true">°C</span>
-                    <span className="visually-hidden">Celsius</span>
-                  </button>
-                </fieldset>
-                <button 
-                  className="refresh-button"
-                  onClick={fetchWeatherForecast} 
-                  disabled={loading}
-                  aria-label={loading ? 'Loading weather forecast' : 'Refresh weather forecast'}
-                  type="button"
-                >
-                  <svg 
-                    className={`refresh-icon ${loading ? 'spinning' : ''}`}
-                    width="20" 
-                    height="20" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                  </svg>
-                  <span>{loading ? 'Loading...' : 'Refresh'}</span>
-                </button>
-              </div>
-            </div>
-            
-            {error && (
-              <div className="error-message" role="alert" aria-live="polite">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span>{error}</span>
-              </div>
-            )}
-            
-            {loading && weatherData.length === 0 && (
-              <div className="loading-skeleton" role="status" aria-live="polite" aria-label="Loading weather data">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="skeleton-row" aria-hidden="true" />
-                ))}
-                <span className="visually-hidden">Loading weather forecast data...</span>
-              </div>
-            )}
-            
-            {weatherData.length > 0 && (
-              <div className="weather-grid">
-                {weatherData.map((forecast, index) => (
-                  <article key={index} className="weather-card" aria-label={`Weather for ${formatDate(forecast.date)}`}>
-                    <h3 className="weather-date">
-                      <time dateTime={forecast.date}>{formatDate(forecast.date)}</time>
-                    </h3>
-                    <p className="weather-summary">{forecast.summary}</p>
-                    <div className="weather-temps" aria-label={`Temperature: ${useCelsius ? forecast.temperatureC : forecast.temperatureF} degrees ${useCelsius ? 'Celsius' : 'Fahrenheit'}`}>
-                      <div className="temp-group">
-                        <span className="temp-value" aria-hidden="true">
-                          {useCelsius ? forecast.temperatureC : forecast.temperatureF}°
-                        </span>
-                        <span className="temp-unit" aria-hidden="true">{useCelsius ? 'Celsius' : 'Fahrenheit'}</span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
+      <div className="page-content flex-grow flex-column padding-16">
+        <div className="flex-row flex-center margin-bottom-16">
+          <Toggle
+            checked={useCelsius}
+            onChange={(_e, checked) => setUseCelsius(checked)}
+            text="Use Celsius"
+            offText="°F"
+            onText="°C"
+          />
+        </div>
 
-      <footer className="app-footer">
-        <nav aria-label="Footer navigation">
-          <a href="https://aspire.dev" target="_blank" rel="noopener noreferrer">
-            Learn more about Aspire<span className="visually-hidden"> (opens in new tab)</span>
-          </a>
-          <a 
-            href="https://github.com/dotnet/aspire" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="github-link"
-            aria-label="View Aspire on GitHub (opens in new tab)"
+        {error && (
+          <MessageCard
+            className="margin-bottom-16"
+            severity={MessageCardSeverity.Error}
+            onDismiss={() => setError(null)}
           >
-            <img src="/github.svg" alt="" width="24" height="24" aria-hidden="true" />
-            <span className="visually-hidden">GitHub</span>
-          </a>
-        </nav>
-      </footer>
+            {error}
+          </MessageCard>
+        )}
+
+        {loading && weatherData.length === 0 ? (
+          <div className="flex-grow flex-row flex-center">
+            <Spinner size={SpinnerSize.large} label="Loading forecast..." />
+          </div>
+        ) : weatherData.length === 0 && !error ? (
+          <ZeroData
+            primaryText="No forecast data"
+            secondaryText="Click Refresh to load weather forecast data."
+            imageAltText="No data"
+            actionText="Refresh"
+            actionType={ZeroDataActionType.ctaButton}
+            onActionClick={() => fetchWeatherForecast()}
+          />
+        ) : (
+          <Card
+            className="flex-grow"
+            titleProps={{ text: "5-Day Forecast" }}
+          >
+            <Table<WeatherForecast>
+              columns={columns}
+              itemProvider={itemProvider}
+              role="table"
+            />
+          </Card>
+        )}
+      </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

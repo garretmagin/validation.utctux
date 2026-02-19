@@ -5,6 +5,7 @@ var server = builder.AddProject<Projects.utctux_Server>("server")
     .WithExternalHttpEndpoints();
 
 var webfrontend = builder.AddViteApp("webfrontend", "../frontend")
+    .WithEndpoint("http", e => e.Port = 5173)
     .WithReference(server)
     .WaitFor(server);
 

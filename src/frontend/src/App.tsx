@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Header, TitleSize } from "azure-devops-ui/Header";
 import { Card } from "azure-devops-ui/Card";
 import {
@@ -32,11 +32,17 @@ function formatDate(dateString: string) {
   });
 }
 
+const COL_WIDTH_DATE = new ObservableValue(-30);
+const COL_WIDTH_SUMMARY = new ObservableValue(-40);
+const COL_WIDTH_TEMP = new ObservableValue(-30);
+
 function App() {
   const [weatherData, setWeatherData] = useState<WeatherForecast[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useCelsius, setUseCelsius] = useState(false);
+  const useCelsiusRef = useRef(useCelsius);
+  useCelsiusRef.current = useCelsius;
 
   const fetchWeatherForecast = async () => {
     setLoading(true);
@@ -66,7 +72,7 @@ function App() {
       {
         id: "date",
         name: "Date",
-        width: new ObservableValue(-30),
+        width: COL_WIDTH_DATE,
         renderCell: (
           _rowIndex: number,
           columnIndex: number,
@@ -85,7 +91,7 @@ function App() {
       {
         id: "summary",
         name: "Summary",
-        width: new ObservableValue(-40),
+        width: COL_WIDTH_SUMMARY,
         renderCell: (
           _rowIndex: number,
           columnIndex: number,
@@ -103,8 +109,8 @@ function App() {
       },
       {
         id: "temperature",
-        name: useCelsius ? "Temp (°C)" : "Temp (°F)",
-        width: new ObservableValue(-30),
+        name: "Temperature",
+        width: COL_WIDTH_TEMP,
         renderCell: (
           _rowIndex: number,
           columnIndex: number,
@@ -117,13 +123,13 @@ function App() {
             key={columnIndex}
           >
             <span className="font-weight-semibold">
-              {useCelsius ? item.temperatureC : item.temperatureF}°
+              {useCelsiusRef.current ? `${item.temperatureC}°C` : `${item.temperatureF}°F`}
             </span>
           </SimpleTableCell>
         ),
       },
     ],
-    [useCelsius]
+    []
   );
 
   const itemProvider = useMemo(
@@ -190,6 +196,7 @@ function App() {
             titleProps={{ text: "5-Day Forecast" }}
           >
             <Table<WeatherForecast>
+              key={useCelsius ? "c" : "f"}
               columns={columns}
               itemProvider={itemProvider}
               role="table"

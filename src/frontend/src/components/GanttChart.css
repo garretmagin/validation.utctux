@@ -221,7 +221,7 @@
 .gantt-legend {
   display: flex;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 60px;
   flex-wrap: wrap;
 }
 

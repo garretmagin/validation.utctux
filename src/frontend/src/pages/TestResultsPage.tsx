@@ -5,6 +5,7 @@ import { Card } from "azure-devops-ui/Card";
 import { ZeroData, ZeroDataActionType } from "azure-devops-ui/ZeroData";
 import BuildSelector from "../components/BuildSelector";
 import StatusPanel from "../components/StatusPanel";
+import SummaryDashboard from "../components/SummaryDashboard";
 import GanttChart from "../components/GanttChart";
 import TestpassTable from "../components/TestpassTable";
 import ResultsFilters from "../components/ResultsFilters";
@@ -35,6 +36,7 @@ export default function TestResultsPage() {
     executionSystem: null,
     requirement: null,
     status: null,
+    scope: null,
   });
 
   const filteredTestpasses = useMemo(() => {
@@ -52,6 +54,7 @@ export default function TestResultsPage() {
       )
         return false;
       if (filters.status && !matchesStatus(tp, filters.status)) return false;
+      if (filters.scope && tp.scope?.toLowerCase() !== filters.scope.toLowerCase()) return false;
       return true;
     });
   }, [results?.testpasses, filters]);
@@ -117,19 +120,12 @@ export default function TestResultsPage() {
 
         {fqbn && status === "completed" && results && results.testpasses.length > 0 && (
           <>
-            <Card
-              className="flex-grow margin-top-16"
-              titleProps={{ text: `Build: ${fqbn}` }}
-            >
-              <div className="padding-16">
-                <div className="flex-row" style={{ gap: "24px" }}>
-                  <span>Total: {results.summary.total}</span>
-                  <span>Passed: {results.summary.passed}</span>
-                  <span>Failed: {results.summary.failed}</span>
-                  <span>Running: {results.summary.running}</span>
-                </div>
-              </div>
-            </Card>
+            <SummaryDashboard
+              buildInfo={results.buildInfo}
+              summary={results.summary}
+              testpasses={filteredTestpasses}
+              timeRange={results.timeRange}
+            />
 
             <div className="margin-top-16">
               <ResultsFilters onFilterChange={setFilters} />
@@ -143,7 +139,7 @@ export default function TestResultsPage() {
             </div>
 
             <Card className="flex-grow margin-top-16">
-              <TestpassTable testpasses={filteredTestpasses} />
+              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.registrationDate} />
             </Card>
           </>
         )}

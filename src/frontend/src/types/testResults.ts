@@ -18,6 +18,13 @@ export interface BuildInfo {
   status: string;
 }
 
+export interface ChunkAvailabilityDto {
+  chunkName: string;
+  flavor: string;
+  availableAfterBuildStart: string | null;
+  availableAt: string | null;
+}
+
 export interface TestpassDto {
   name: string;
   requirement: string;
@@ -31,7 +38,7 @@ export interface TestpassDto {
   schedulePipelineUrl: string;
   type: string;
   scope: string;
-  dependentChunks: unknown[];
+  dependentChunks: ChunkAvailabilityDto[];
   isRerun: boolean;
   rerunReason: string | null;
   rerunOwner: string | null;

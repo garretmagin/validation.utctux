@@ -118,7 +118,37 @@ function TimelineRuler({
       className={`gantt-timeline-ruler${bottom ? " bottom" : ""}`}
     >
       <div className="gantt-timeline-spacer" />
-      <div className="gantt-timeline-track">{marks}</div>
+      <div className="gantt-timeline-track">
+        {!bottom && (
+          <span
+            className="gantt-build-started-mark"
+            style={{
+              position: "absolute",
+              left: "0%",
+              transform: "rotate(-45deg)",
+              transformOrigin: "bottom left",
+              fontWeight: 600,
+              color: "#004578",
+              fontSize: "11px",
+              top: "-14px",
+            }}
+          >
+            Build Started
+          </span>
+        )}
+        <span
+          className="gantt-build-started-line"
+          style={{
+            position: "absolute",
+            left: "0%",
+            top: 0,
+            bottom: 0,
+            borderLeft: "2px dashed #004578",
+            zIndex: 1,
+          }}
+        />
+        {marks}
+      </div>
     </div>
   );
 }
@@ -128,12 +158,14 @@ function GanttBar({
   leftPercent,
   widthPercent,
   durationText,
+  index,
 }: {
   tp: TestpassDto;
   leftPercent: number;
   widthPercent: number;
   durationText: string;
-}) {
+  index: number;
+}){
   const [showTooltip, setShowTooltip] = useState(false);
 
   const statusClass = getStatusClass(tp);
@@ -149,6 +181,7 @@ function GanttBar({
 
   return (
     <>
+      <a href={`#testpass-${index}`} style={{ display: "contents" }}>
       <div
         className={`gantt-bar ${statusClass}`}
         style={{
@@ -158,6 +191,9 @@ function GanttBar({
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
       >
+        {tp.isRerun && (
+          <span className="gantt-rerun-icon" title="Rerun">↻</span>
+        )}
         {showTooltip && (
           <div className="gantt-tooltip">
             <div className="gantt-tooltip-row">
@@ -190,6 +226,7 @@ function GanttBar({
           </div>
         )}
       </div>
+      </a>
       {durationText && (
         <span
           className="gantt-duration"
@@ -206,7 +243,11 @@ export default function GanttChart({ testpasses, timeRange }: GanttChartProps) {
   const minTime = useMemo(() => new Date(timeRange.min ?? 0).getTime(), [timeRange.min]);
   const maxTime = useMemo(() => new Date(timeRange.max ?? 0).getTime(), [timeRange.max]);
   const totalSeconds = useMemo(
-    () => Math.max((maxTime - minTime) / 1000, 1),
+    () => {
+      const raw = Math.max((maxTime - minTime) / 1000, 1);
+      // Add 5% right-side padding so bars aren't jammed against the edge
+      return raw * 1.05;
+    },
     [minTime, maxTime]
   );
 
@@ -315,6 +356,7 @@ export default function GanttChart({ testpasses, timeRange }: GanttChartProps) {
                     leftPercent={leftPercent}
                     widthPercent={widthPercent}
                     durationText={durationText}
+                    index={i}
                   />
                 </div>
               </div>

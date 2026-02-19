@@ -35,7 +35,7 @@ public class TestDataService
     /// <summary>
     /// Loads and aggregates test results from UTCT, CloudTest, and Nova for a given FQBN.
     /// </summary>
-    public async Task<List<AggregatedTestpassResult>> LoadTestResultsAsync(
+    public async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildRegistrationDate)> LoadTestResultsAsync(
         string fqbn,
         IProgress<string>? progress = null,
         bool loadChunkData = true,
@@ -51,7 +51,7 @@ public class TestDataService
         {
             progress?.Report("⚠ Could not resolve build identity — no ADO build info found.");
             _logger.LogWarning("Could not resolve build identity for FQBN: {Fqbn}", fqbn);
-            return [];
+            return ([], null);
         }
 
         var parsedFqbn = Models.WindowsBuildVersion.FromAnySupportedFormat(fqbn);
@@ -93,7 +93,7 @@ public class TestDataService
         var results = AggregateResults(summaryList, cloudTestData, novaData, chunkLookup);
 
         progress?.Report($"Loaded {results.Count} test results.");
-        return results;
+        return (results, buildRegistrationDate);
     }
 
     private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? RegistrationDate)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)

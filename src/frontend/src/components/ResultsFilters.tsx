@@ -4,6 +4,7 @@ export interface TestResultsFilters {
   executionSystem: string | null; // null = all
   requirement: string | null;
   status: string | null;
+  scope: string | null;
 }
 
 export interface ResultsFiltersProps {
@@ -14,6 +15,7 @@ const INITIAL_FILTERS: TestResultsFilters = {
   executionSystem: null,
   requirement: null,
   status: null,
+  scope: null,
 };
 
 interface ToggleGroupProps {
@@ -119,6 +121,16 @@ export default function ResultsFilters({
         ]}
         value={filters.status}
         onChange={(v) => update({ status: v })}
+      />
+      <ToggleGroup
+        label="Scope"
+        options={[
+          { key: null, text: "All" },
+          { key: "Global", text: "Global" },
+          { key: "Local", text: "Local" },
+        ]}
+        value={filters.scope}
+        onChange={(v) => update({ scope: v })}
       />
     </div>
   );

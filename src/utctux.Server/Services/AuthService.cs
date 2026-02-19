@@ -1,4 +1,5 @@
 using Azure.Core;
+using Azure.Identity;
 using Common.DiscoverClient;
 using Common.MsalAuth;
 using Microsoft.Extensions.Options;
@@ -23,13 +24,19 @@ public class AuthService
 
     public const string AzureDevOpsScope = "499b84ac-1321-427f-aa17-267ca6975798/.default";
 
+    private static readonly string AuthRecordPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "utctux-auth-record.json");
+
     private readonly ILogger<AuthService> _logger;
     private readonly UtctAuthOptions _options;
+    private readonly Lazy<TokenCredential> _cachedCredential;
 
     public AuthService(ILogger<AuthService> logger, IOptions<UtctAuthOptions> options)
     {
         _logger = logger;
         _options = options.Value;
+        _cachedCredential = new Lazy<TokenCredential>(CreateUserTokenCredential);
     }
 
     /// <summary>
@@ -40,12 +47,12 @@ public class AuthService
     {
         if (_options.UseInteractiveAuth)
         {
-            return CreateUserTokenCredential();
+            return _cachedCredential.Value;
         }
 
         // TODO: Use managed identity or app registration for server/production scenarios.
         _logger.LogWarning("Production auth not configured; falling back to interactive user auth");
-        return CreateUserTokenCredential();
+        return _cachedCredential.Value;
     }
 
     /// <summary>
@@ -116,25 +123,56 @@ public class AuthService
     public IDiscoverBuildClient GetDiscoverClient()
     {
         var settings = DiscoverClientSettings.TargetingPmeTenant();
-        return new DiscoverServiceClient(UtctClientId.ToString(), AzureTenant.Microsoft, settings);
+        var credential = GetTokenCredential();
+        return new DiscoverServiceClient(credential, AzureTenant.Microsoft, settings);
     }
 
     private HttpClient CreateAuthenticatedHttpClient(string scope)
     {
         var credential = GetTokenCredential();
         var tokenRequestContext = new TokenRequestContext([scope], tenantId: AzureTenant.Microsoft);
-        var handler = new MsalHttpClientHandler(credential, tokenRequestContext);
+        var handler = new MsalHttpClientHandler(credential, tokenRequestContext)
+        {
+            InnerHandler = new HttpClientHandler()
+        };
         return new HttpClient(handler);
     }
 
     private static TokenCredential CreateUserTokenCredential()
     {
-        var options = new MsalAuthOptions
+        // Load a previously-saved AuthenticationRecord so the credential can
+        // silently redeem cached refresh tokens without opening a browser.
+        AuthenticationRecord? record = null;
+        if (File.Exists(AuthRecordPath))
         {
-            EnableUserAuth = true,
-            ClientId = UtctClientId,
+            using var stream = File.OpenRead(AuthRecordPath);
+            record = AuthenticationRecord.Deserialize(stream);
+        }
+
+        var options = new InteractiveBrowserCredentialOptions
+        {
             TenantId = AzureTenant.Microsoft,
+            ClientId = UtctClientId.ToString("D"),
+            TokenCachePersistenceOptions = new TokenCachePersistenceOptions
+            {
+                Name = "utctux-dev-cache",
+            },
+            AuthenticationRecord = record,
         };
-        return options.ToTokenCredential();
+
+        var credential = new InteractiveBrowserCredential(options);
+
+        if (record is null)
+        {
+            // First run: force an interactive auth and persist the record
+            // so future runs (and requests within this run) are silent.
+            // Use a scope from the app registration's allowed resources.
+            var context = new TokenRequestContext([AzureDevOpsScope]);
+            var newRecord = credential.Authenticate(context);
+            using var stream = File.Create(AuthRecordPath);
+            newRecord.Serialize(stream);
+        }
+
+        return credential;
     }
 }

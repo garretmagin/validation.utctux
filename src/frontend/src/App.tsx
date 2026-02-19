@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Header, TitleSize } from "azure-devops-ui/Header";
 import { Card } from "azure-devops-ui/Card";
 import {
@@ -41,8 +41,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useCelsius, setUseCelsius] = useState(false);
-  const useCelsiusRef = useRef(useCelsius);
-  useCelsiusRef.current = useCelsius;
 
   const fetchWeatherForecast = async () => {
     setLoading(true);
@@ -109,7 +107,7 @@ function App() {
       },
       {
         id: "temperature",
-        name: "Temperature",
+        name: useCelsius ? "Temp (°C)" : "Temp (°F)",
         width: COL_WIDTH_TEMP,
         renderCell: (
           _rowIndex: number,
@@ -123,13 +121,13 @@ function App() {
             key={columnIndex}
           >
             <span className="font-weight-semibold">
-              {useCelsiusRef.current ? `${item.temperatureC}°C` : `${item.temperatureF}°F`}
+              {useCelsius ? `${item.temperatureC}°C` : `${item.temperatureF}°F`}
             </span>
           </SimpleTableCell>
         ),
       },
     ],
-    []
+    [useCelsius]
   );
 
   const itemProvider = useMemo(
@@ -196,7 +194,6 @@ function App() {
             titleProps={{ text: "5-Day Forecast" }}
           >
             <Table<WeatherForecast>
-              key={useCelsius ? "c" : "f"}
               columns={columns}
               itemProvider={itemProvider}
               role="table"

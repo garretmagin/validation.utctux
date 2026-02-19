@@ -1,0 +1,154 @@
+import { useCallback, useMemo, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Header, TitleSize } from "azure-devops-ui/Header";
+import { Card } from "azure-devops-ui/Card";
+import { ZeroData, ZeroDataActionType } from "azure-devops-ui/ZeroData";
+import BuildSelector from "../components/BuildSelector";
+import StatusPanel from "../components/StatusPanel";
+import GanttChart from "../components/GanttChart";
+import TestpassTable from "../components/TestpassTable";
+import ResultsFilters from "../components/ResultsFilters";
+import type { TestResultsFilters } from "../components/ResultsFilters";
+import type { TestpassDto } from "../types/testResults";
+import { useTestResults } from "../hooks/useTestResults";
+
+function matchesStatus(tp: TestpassDto, statusFilter: string): boolean {
+  const s = tp.status?.toLowerCase() ?? "";
+  const r = tp.result?.toLowerCase() ?? "";
+  switch (statusFilter) {
+    case "Passed":
+      return r === "passed" || r === "succeeded";
+    case "Failed":
+      return r === "failed" || r === "timedout";
+    case "Running":
+      return s === "running" || s === "inprogress";
+    default:
+      return false;
+  }
+}
+
+export default function TestResultsPage() {
+  const { fqbn } = useParams<{ fqbn?: string }>();
+  const navigate = useNavigate();
+  const { status, progress, results, error, isTimeout, refresh } = useTestResults(fqbn);
+  const [filters, setFilters] = useState<TestResultsFilters>({
+    executionSystem: null,
+    requirement: null,
+    status: null,
+  });
+
+  const filteredTestpasses = useMemo(() => {
+    if (!results?.testpasses) return [];
+    return results.testpasses.filter((tp) => {
+      if (
+        filters.executionSystem &&
+        tp.executionSystem?.toLowerCase() !==
+          filters.executionSystem.toLowerCase()
+      )
+        return false;
+      if (
+        filters.requirement &&
+        tp.requirement?.toLowerCase() !== filters.requirement.toLowerCase()
+      )
+        return false;
+      if (filters.status && !matchesStatus(tp, filters.status)) return false;
+      return true;
+    });
+  }, [results?.testpasses, filters]);
+
+  const onFqbnSelected = useCallback(
+    (selectedFqbn: string) => {
+      navigate(`/testresults/${encodeURIComponent(selectedFqbn)}`);
+    },
+    [navigate]
+  );
+
+  return (
+    <div className="flex-grow flex-column">
+      <Header
+        title="Test Results"
+        titleSize={TitleSize.Large}
+        commandBarItems={
+          fqbn
+            ? [
+                {
+                  id: "refresh",
+                  text: "Refresh",
+                  iconProps: { iconName: "Refresh" },
+                  onActivate: refresh,
+                  important: true,
+                },
+              ]
+            : []
+        }
+      />
+      <div className="page-content flex-grow flex-column padding-16">
+        <BuildSelector initialFqbn={fqbn} onFqbnSelected={onFqbnSelected} />
+
+        {!fqbn && (
+          <div className="margin-top-16">
+            <ZeroData
+              primaryText="No build selected"
+              secondaryText="Select a build from the dropdown above to view test results."
+              imageAltText="No build selected"
+              actionType={ZeroDataActionType.ctaButton}
+              actionText=""
+            />
+          </div>
+        )}
+
+        {fqbn &&
+          (status === "loading" || status === "polling" || status === "error") && (
+            <StatusPanel status={status} progress={progress} error={error} isTimeout={isTimeout} onRetry={refresh} />
+          )}
+
+        {fqbn && status === "completed" && results && results.testpasses.length === 0 && (
+          <div className="margin-top-16">
+            <ZeroData
+              primaryText="No test passes found"
+              secondaryText="This build has no test pass data. Try refreshing or selecting a different build."
+              imageAltText="No test passes"
+              actionText="Refresh"
+              actionType={ZeroDataActionType.ctaButton}
+              onActionClick={refresh}
+            />
+          </div>
+        )}
+
+        {fqbn && status === "completed" && results && results.testpasses.length > 0 && (
+          <>
+            <Card
+              className="flex-grow margin-top-16"
+              titleProps={{ text: `Build: ${fqbn}` }}
+            >
+              <div className="padding-16">
+                <div className="flex-row" style={{ gap: "24px" }}>
+                  <span>Total: {results.summary.total}</span>
+                  <span>Passed: {results.summary.passed}</span>
+                  <span>Failed: {results.summary.failed}</span>
+                  <span>Running: {results.summary.running}</span>
+                </div>
+              </div>
+            </Card>
+
+            <div className="margin-top-16">
+              <ResultsFilters onFilterChange={setFilters} />
+            </div>
+
+            <div className="margin-top-16">
+              <GanttChart
+                testpasses={filteredTestpasses}
+                timeRange={results.timeRange}
+              />
+            </div>
+
+            <Card className="flex-grow margin-top-16">
+              <TestpassTable testpasses={filteredTestpasses} />
+            </Card>
+          </>
+        )}
+
+      </div>
+    </div>
+  );
+}

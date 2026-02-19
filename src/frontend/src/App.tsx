@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { Header, TitleSize } from "azure-devops-ui/Header";
 import { Card } from "azure-devops-ui/Card";
 import {
@@ -16,6 +17,7 @@ import {
 } from "azure-devops-ui/MessageCard";
 import { Toggle } from "azure-devops-ui/Toggle";
 import type { IHeaderCommandBarItem } from "azure-devops-ui/HeaderCommandBar";
+import TestResultsPage from "./pages/TestResultsPage";
 
 interface WeatherForecast {
   date: string;
@@ -36,7 +38,7 @@ const COL_WIDTH_DATE = new ObservableValue(-30);
 const COL_WIDTH_SUMMARY = new ObservableValue(-40);
 const COL_WIDTH_TEMP = new ObservableValue(-30);
 
-function App() {
+function WeatherForecastPage() {
   const [weatherData, setWeatherData] = useState<WeatherForecast[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +203,28 @@ function App() {
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+function NavBar() {
+  const location = useLocation();
+  return (
+    <div className="flex-row padding-horizontal-16 padding-vertical-8" style={{ gap: "16px", borderBottom: "1px solid var(--palette-neutral-20, #eee)" }}>
+      <Link to="/" style={{ fontWeight: location.pathname === "/" ? 700 : 400 }}>Weather</Link>
+      <Link to="/testresults" style={{ fontWeight: location.pathname.startsWith("/testresults") ? 700 : 400 }}>Test Results</Link>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <div className="flex-grow flex-column">
+      <NavBar />
+      <Routes>
+        <Route path="/" element={<WeatherForecastPage />} />
+        <Route path="/testresults/:fqbn?" element={<TestResultsPage />} />
+      </Routes>
     </div>
   );
 }

@@ -214,7 +214,9 @@ public class BackgroundJobManager
             Scope = tp.TestpassScope,
             DependentChunks = tp.DependentChunks,
             IsRerun = tp.IsRerun,
+            IsCurrentRun = tp.IsCurrentRun,
             RerunReason = tp.CurrentRerunReason,
+            RerunOwner = tp.CurrentRerunOwner,
             Runs = tp.Runs.Select(MapTestpass).ToList(),
         };
     }

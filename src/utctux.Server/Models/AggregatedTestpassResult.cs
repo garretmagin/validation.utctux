@@ -27,11 +27,17 @@ public class AggregatedTestpassResult
     public string? CurrentRerunOwner { get; set; }
 
     /// <summary>
-    /// All related runs for this testpass (parent original, siblings, Nova-only reruns).
-    /// Does not include self. Each entry is a fully hydrated <see cref="AggregatedTestpassResult"/>
+    /// All runs for this testpass including self (parent original, siblings, Nova-only reruns).
+    /// Each entry is a fully hydrated <see cref="AggregatedTestpassResult"/>
     /// with its own <see cref="Runs"/> list always empty (flat, no recursion).
+    /// The entry representing the current testpass has <see cref="IsCurrentRun"/> set to true.
     /// </summary>
     public IReadOnlyList<AggregatedTestpassResult> Runs { get; set; } = [];
+
+    /// <summary>
+    /// True when this entry in a Runs list represents the testpass that owns the list.
+    /// </summary>
+    public bool IsCurrentRun { get; set; }
 
     /// <summary>
     /// Whether this testpass is a rerun of another testpass or has reruns itself,

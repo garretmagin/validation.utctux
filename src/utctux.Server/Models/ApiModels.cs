@@ -57,7 +57,9 @@ public record TestpassDto
     public string? Scope { get; init; }
     public IReadOnlyList<ChunkAvailabilityInfo> DependentChunks { get; init; } = [];
     public bool IsRerun { get; init; }
+    public bool IsCurrentRun { get; init; }
     public string? RerunReason { get; init; }
+    public string? RerunOwner { get; init; }
     public IReadOnlyList<TestpassDto> Runs { get; init; } = [];
 }
 

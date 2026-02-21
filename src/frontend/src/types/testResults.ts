@@ -40,6 +40,7 @@ export interface TestpassDto {
   scope: string;
   dependentChunks: ChunkAvailabilityDto[];
   isRerun: boolean;
+  isCurrentRun: boolean;
   rerunReason: string | null;
   rerunOwner: string | null;
   runs: TestpassDto[];

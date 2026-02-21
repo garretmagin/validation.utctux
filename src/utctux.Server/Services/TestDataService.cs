@@ -92,6 +92,10 @@ public class TestDataService
         progress?.Report("Aggregating test results...");
         var results = AggregateResults(summaryList, cloudTestData, novaData, chunkLookup);
 
+        // Phase 4: Resolve rerun data
+        progress?.Report("Resolving rerun data...");
+        await BuildRunsListAsync(results, utctClient, cloudTestData);
+
         progress?.Report($"Loaded {results.Count} test results.");
         return (results, buildRegistrationDate);
     }
@@ -378,5 +382,298 @@ public class TestDataService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Builds the unified <see cref="AggregatedTestpassResult.Runs"/> list for each testpass.
+    /// Results where <see cref="AggregatedTestpassResult.IsRerunsLikely"/> is true are processed
+    /// in parallel, each independently resolving UTCT-tracked reruns and Nova-only reruns.
+    /// </summary>
+    private async Task BuildRunsListAsync(
+        List<AggregatedTestpassResult> results,
+        UtctApiClient utctClient,
+        IReadOnlyList<TestSession> cloudTestData)
+    {
+        var tasks = results
+            .Where(r => r.IsRerunsLikely || r.IsNovaRerunLikely)
+            .Select(r => ProcessResultRerunsAsync(r, utctClient, cloudTestData))
+            .ToList();
+
+        if (tasks.Count != 0)
+        {
+            _logger.LogInformation("Resolving rerun data for {Count} testpasses", tasks.Count);
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Resolves all rerun data for a single result:
+    /// 1. If this is a rerun, queries the parent testpass and adds it + siblings as Run entries
+    /// 2. If this is an original with reruns, adds each rerun as a Run entry
+    /// 3. If <see cref="AggregatedTestpassResult.IsNovaRerunLikely"/>, discovers Nova-only reruns
+    /// </summary>
+    private async Task ProcessResultRerunsAsync(
+        AggregatedTestpassResult result,
+        UtctApiClient utctClient,
+        IReadOnlyList<TestSession> cloudTestData)
+    {
+        var runs = new List<AggregatedTestpassResult>();
+        var currentGuid = result.TestpassSummary!.TestpassGuid;
+        var seenGuids = new HashSet<Guid> { currentGuid };
+
+        // Also seed with the Nova GUID so Nova family relatives that match self are deduped
+        if (result.NovaTestpass?.TestPassGuid is { } currentNovaGuid && currentNovaGuid != Guid.Empty)
+        {
+            seenGuids.Add(currentNovaGuid);
+        }
+
+        var parentRef = result.TestpassSummary?.ParentTestpass;
+        if (parentRef is not null)
+        {
+            // This is a rerun — resolve the parent to discover the full rerun family
+            UtctTestpass? parent = null;
+            try
+            {
+                parent = await utctClient.GetTestpassAsync(parentRef.TestpassGuid, resolveReferences: true).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Failed to load parent testpass {Guid}: {Error}", parentRef.TestpassGuid, ex.Message);
+            }
+
+            if (parent is not null)
+            {
+                // Extract current testpass's reason/owner from parent's rerun list
+                foreach (var rerun in parent.RerunTestpassReferences)
+                {
+                    if (rerun.TestpassGuid == currentGuid)
+                    {
+                        result.CurrentRerunReason = rerun.Reason;
+                        result.CurrentRerunOwner = rerun.Owner;
+                        break;
+                    }
+                }
+
+                // Add the parent (original) as a Run entry
+                if (seenGuids.Add(parent.TestpassGuid))
+                {
+                    var parentRun = await HydrateRunAsync(parent, null, cloudTestData).ConfigureAwait(false);
+                    runs.Add(parentRun);
+                }
+
+                // Add sibling reruns (all parent's reruns except already seen)
+                foreach (var rerun in parent.RerunTestpassReferences)
+                {
+                    if (!seenGuids.Add(rerun.TestpassGuid))
+                    {
+                        continue;
+                    }
+
+                    var siblingRun = await HydrateRunAsync(rerun.Testpass, rerun.TestpassGuid, cloudTestData).ConfigureAwait(false);
+                    siblingRun.CurrentRerunReason = rerun.Reason;
+                    siblingRun.CurrentRerunOwner = rerun.Owner;
+                    runs.Add(siblingRun);
+                }
+            }
+        }
+        else if (result.TestpassSummary?.RerunTestpassReferences?.Count > 0)
+        {
+            // Original testpass with reruns — add each rerun as a Run entry
+            foreach (var rerun in result.TestpassSummary.RerunTestpassReferences)
+            {
+                if (!seenGuids.Add(rerun.TestpassGuid))
+                {
+                    continue;
+                }
+
+                var rerunRun = await HydrateRunAsync(rerun.Testpass, rerun.TestpassGuid, cloudTestData).ConfigureAwait(false);
+                rerunRun.CurrentRerunReason = rerun.Reason;
+                rerunRun.CurrentRerunOwner = rerun.Owner;
+                runs.Add(rerunRun);
+            }
+        }
+
+        // Discover Nova-only reruns not tracked by UTCT
+        if (result.IsNovaRerunLikely)
+        {
+            var novaRuns = await EnrichWithNovaFamilyAsync(result).ConfigureAwait(false);
+            foreach (var nr in novaRuns)
+            {
+                var novaGuid = nr.NovaTestpass?.TestPassGuid ?? Guid.Empty;
+                if (novaGuid == Guid.Empty || seenGuids.Add(novaGuid))
+                {
+                    runs.Add(nr);
+                }
+            }
+        }
+
+        // Always include self in the runs list so all runs are visible
+        runs.Add(new AggregatedTestpassResult
+        {
+            TestpassSummary = result.TestpassSummary,
+            TestSession = result.TestSession,
+            NovaTestpass = result.NovaTestpass,
+            CurrentRerunReason = result.CurrentRerunReason,
+            CurrentRerunOwner = result.CurrentRerunOwner,
+            IsCurrentRun = true,
+        });
+
+        result.Runs = runs;
+    }
+
+    /// <summary>
+    /// Discovers Nova-only reruns via the Nova Family API for a single result.
+    /// Returns hydrated <see cref="AggregatedTestpassResult"/> entries for each relative
+    /// testpass not already known to this result.
+    /// </summary>
+    private async Task<List<AggregatedTestpassResult>> EnrichWithNovaFamilyAsync(AggregatedTestpassResult result)
+    {
+        var novaRuns = new List<AggregatedTestpassResult>();
+
+        NovaTestPassFamily? family;
+        try
+        {
+            family = await _novaService.GetTestPassFamilyAsync(result.NovaTestpass!.TestPassGuid).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Failed to load Nova Family data for testpass {Name} (GUID={Guid}): {Error}",
+                result.TestpassSummary?.TestpassName, result.NovaTestpass!.TestPassGuid, ex.Message);
+            return novaRuns;
+        }
+
+        if (family is null || (family.ChildTestPassIds.Count == 0 && family.ParentTestPassIds.Count == 0))
+        {
+            return novaRuns;
+        }
+
+        // Skip self
+        var ownTestPassId = (int)result.NovaTestpass.TestPassId;
+        var relativeIds = new List<int>();
+        relativeIds.AddRange(family.ParentTestPassIds);
+        relativeIds.AddRange(family.ChildTestPassIds);
+
+        foreach (var relativeId in relativeIds)
+        {
+            if (relativeId == ownTestPassId)
+            {
+                continue;
+            }
+
+            var run = await ResolveAndHydrateRelativeAsync(relativeId).ConfigureAwait(false);
+            novaRuns.Add(run);
+        }
+
+        if (novaRuns.Count != 0)
+        {
+            _logger.LogDebug("Found {Count} Nova-only rerun(s) for testpass {Name}",
+                novaRuns.Count, result.TestpassSummary?.TestpassName);
+        }
+
+        return novaRuns;
+    }
+
+    /// <summary>
+    /// Creates a fully hydrated <see cref="AggregatedTestpassResult"/> for a related run.
+    /// First checks already-loaded <paramref name="cloudTestData"/>,
+    /// then falls back to Nova API queries if data is not found.
+    /// </summary>
+    private async Task<AggregatedTestpassResult> HydrateRunAsync(
+        UtctTestpass? testpassSummary,
+        Guid? testpassGuid,
+        IReadOnlyList<TestSession> cloudTestData)
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = testpassSummary,
+        };
+
+        var guid = testpassGuid ?? testpassSummary?.TestpassGuid ?? Guid.Empty;
+        var executionSystem = testpassSummary?.ExecutionSystem;
+
+        // Try to hydrate CloudTest session
+        if (executionSystem == ExecutionSystem.CloudTest)
+        {
+            var sessionId = testpassSummary?.CloudTestSessionId ?? Guid.Empty;
+            if (sessionId != Guid.Empty)
+            {
+                result.TestSession = cloudTestData.FirstOrDefault(t => t.TestSessionId == sessionId);
+            }
+        }
+
+        // If we still don't have Nova data, query the API
+        if (result.NovaTestpass is null && guid != Guid.Empty &&
+            (executionSystem is null or ExecutionSystem.T3C or ExecutionSystem.T3))
+        {
+            try
+            {
+                var summary = await _novaService.GetTestPassSummaryAsync(guid).ConfigureAwait(false);
+                if (summary is not null)
+                {
+                    result.NovaTestpass = new NovaTestpass
+                    {
+                        TestPassId = summary.Id,
+                        TestPassName = summary.Name,
+                        TestPassGuid = guid,
+                        StartTime = summary.StartTime,
+                        EndTime = summary.EndTime,
+                        StatusName = summary.ExecutionStatus,
+                        PassRate = summary.PassRate,
+                        Comments = summary.Comments,
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("Failed to query Nova for run {Guid}: {Error}", guid, ex.Message);
+            }
+        }
+
+        // Populate rerun reason from Nova Comments if not already set
+        if (result.CurrentRerunReason is null &&
+            !string.IsNullOrEmpty(result.NovaTestpass?.Comments))
+        {
+            result.CurrentRerunReason = result.NovaTestpass.Comments;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Queries Nova SummaryResults directly by TestPassId to get correct start/end times
+    /// for a relative testpass not in this build's local Nova data.
+    /// </summary>
+    private async Task<AggregatedTestpassResult> ResolveAndHydrateRelativeAsync(int testPassId)
+    {
+        try
+        {
+            var summary = await _novaService.GetTestPassSummaryByIdAsync(testPassId).ConfigureAwait(false);
+            if (summary is not null)
+            {
+                var guid = Guid.TryParse(summary.TestpassGuid, out var parsed) ? parsed : Guid.Empty;
+
+                return new AggregatedTestpassResult
+                {
+                    NovaTestpass = new NovaTestpass
+                    {
+                        TestPassId = summary.Id,
+                        TestPassName = summary.Name,
+                        TestPassGuid = guid,
+                        StartTime = summary.StartTime,
+                        EndTime = summary.EndTime,
+                        StatusName = summary.ExecutionStatus,
+                        PassRate = summary.PassRate,
+                        Comments = summary.Comments,
+                    },
+                    CurrentRerunReason = summary.Comments,
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Failed to query Nova SummaryResults for TestPassId {Id}: {Error}", testPassId, ex.Message);
+        }
+
+        return new AggregatedTestpassResult();
     }
 }

@@ -159,7 +159,7 @@ export default function MiniGanttChart({
   const tpStart = new Date(testpass.startTime).getTime();
   const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();
 
-  // Find latest end across testpass and all runs
+  // Find latest end and earliest start across testpass and all runs
   let latestEnd = tpEnd;
   if (testpass.runs) {
     for (const run of testpass.runs) {
@@ -227,8 +227,8 @@ export default function MiniGanttChart({
     ticks.push({ pct, label: formatTickTime(seconds) });
   }
 
-  // --- Rerun bars ---
-  const reruns = testpass.runs?.filter((r) => r.isRerun) ?? [];
+  // --- Non-primary run bars (exclude current since it's already the main bar) ---
+  const nonPrimaryRuns = (testpass.runs ?? []).filter((r) => !r.isCurrentRun);
 
   return (
     <div style={containerStyle}>
@@ -322,8 +322,8 @@ export default function MiniGanttChart({
           )}
         </div>
 
-        {/* Rerun bars */}
-        {reruns.map((run, i) => {
+        {/* Non-primary run bars (border only, no fill) */}
+        {nonPrimaryRuns.map((run, i) => {
           if (!run.startTime) return null;
           const rStart = new Date(run.startTime).getTime();
           const rEnd = run.endTime ? new Date(run.endTime).getTime() : Date.now();
@@ -334,7 +334,7 @@ export default function MiniGanttChart({
           const rColor = getRerunBorderColor(run.result);
           return (
             <div
-              key={`rerun-${i}`}
+              key={`run-${i}`}
               style={{
                 position: "absolute",
                 top: 0,
@@ -344,25 +344,12 @@ export default function MiniGanttChart({
                 left: `${rLeft}%`,
                 width: `${rWidth}%`,
                 background: "transparent",
-                border: `2px dashed ${rColor}`,
+                border: `2px solid ${rColor}`,
                 boxSizing: "border-box",
-                opacity: 0.6,
+                opacity: 0.7,
                 color: rColor,
               }}
             >
-              <span
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "4px",
-                  transform: "translateY(-50%)",
-                  fontSize: "12px",
-                  pointerEvents: "none",
-                  color: "inherit",
-                }}
-              >
-                ↻
-              </span>
               {rWidth > 5 && (
                 <span
                   style={{

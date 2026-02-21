@@ -16,6 +16,9 @@ public interface INovaRestApi
 
     [Get("/TestPass/Family?testPassGuid={testPassGuid}&noCache=true")]
     Task<NovaTestPassFamily> GetTestPassFamily(Guid testPassGuid);
+
+    [Get("/TestPass/SummaryResults?testPassGuid=&testPassId={testPassId}&noCache=true")]
+    Task<NovaTestpassSummary> GetTestPassSummaryResultsById(int testPassId);
 }
 
 /// <summary>
@@ -59,5 +62,15 @@ public class NovaService
     {
         _logger.LogDebug("Fetching Nova family for testpass {TestPassGuid}", testPassGuid);
         return await Api.GetTestPassFamily(testPassGuid);
+    }
+
+    /// <summary>
+    /// Gets detailed summary results for a test pass by its integer ID.
+    /// Used to resolve Nova-only rerun relatives discovered via the Family API.
+    /// </summary>
+    public async Task<NovaTestpassSummary> GetTestPassSummaryByIdAsync(int testPassId)
+    {
+        _logger.LogDebug("Fetching Nova summary for testpass ID {TestPassId}", testPassId);
+        return await Api.GetTestPassSummaryResultsById(testPassId);
     }
 }

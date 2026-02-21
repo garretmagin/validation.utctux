@@ -37,6 +37,11 @@ public class TestpassTimingData
     /// </summary>
     public bool IsNovaOnly { get; }
 
+    /// <summary>
+    /// True when this entry in a Runs list represents the testpass that owns the list.
+    /// </summary>
+    public bool IsCurrentRun { get; }
+
     public TestpassTimingData(AggregatedTestpassResult result)
     {
         var hasSummary = result.TestpassSummary is not null;
@@ -55,6 +60,7 @@ public class TestpassTimingData
         CurrentRerunOwner = result.CurrentRerunOwner;
         IsRerun = result.TestpassSummary?.IsRerun ?? false;
         IsNovaOnly = !hasSummary;
+        IsCurrentRun = result.IsCurrentRun;
         Runs = (result.Runs ?? []).Select(r => new TestpassTimingData(r)).ToList();
 
         DetailsUrl = result.ExecutionSystemDetailsUri?.ToString() ?? "";

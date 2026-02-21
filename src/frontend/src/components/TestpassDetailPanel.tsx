@@ -10,7 +10,7 @@ const panelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "row",
   gap: "16px",
-  padding: "12px 16px",
+  padding: "12px 24px 12px 16px",
   backgroundColor: "#f8f8f8",
   borderTop: "1px solid #e0e0e0",
 };

@@ -122,6 +122,12 @@ interface MarkerInfo {
   deltaLabel: string;
 }
 
+function getLabelAlignment(pct: number): { transform: string; textAlign: string } {
+  if (pct < 10) return { transform: "translateX(4px)", textAlign: "left" };
+  if (pct > 90) return { transform: "translateX(calc(-100% - 4px))", textAlign: "right" };
+  return { transform: "translateX(-50%)", textAlign: "center" };
+}
+
 function computeMarkerRows(markers: MarkerInfo[]): { marker: MarkerInfo; row: number }[] {
   // Simple collision avoidance: if two labels are within 15% of each other, bump to next row
   const sorted = [...markers].sort((a, b) => a.pct - b.pct);
@@ -332,42 +338,83 @@ export default function MiniGanttChart({
           const rWidth = Math.max(rRight - rLeft, 0.3);
           const rDuration = rEnd - rStart;
           const rColor = getRerunBorderColor(run.result);
+
+          // Calculate overlap with the main execution bar
+          const overlapLeft = Math.max(rLeft, barLeft);
+          const overlapRight = Math.min(rLeft + rWidth, barLeft + barWidth);
+          const hasOverlap = overlapRight > overlapLeft;
+
+          // Clip path to exclude the overlap region (in local coordinates of the rerun bar)
+          let clipPath: string | undefined;
+          if (hasOverlap && rWidth > 0) {
+            const localOverlapStart = ((overlapLeft - rLeft) / rWidth) * 100;
+            const localOverlapEnd = ((overlapRight - rLeft) / rWidth) * 100;
+            // Polygon that covers everything except the overlap interior
+            // (border still rendered via the white overlay)
+            clipPath = `polygon(0% 0%, ${localOverlapStart}% 0%, ${localOverlapStart}% 100%, 0% 100%, 0% 0%, 100% 0%, 100% 100%, ${localOverlapEnd}% 100%, ${localOverlapEnd}% 0%, 100% 0%)`;
+          }
+
           return (
-            <div
-              key={`run-${i}`}
-              style={{
-                position: "absolute",
-                top: 0,
-                height: "100%",
-                borderRadius: "2px",
-                minWidth: "3px",
-                left: `${rLeft}%`,
-                width: `${rWidth}%`,
-                background: "transparent",
-                border: `2px solid ${rColor}`,
-                boxSizing: "border-box",
-                opacity: 0.7,
-                color: rColor,
-              }}
-            >
+            <React.Fragment key={`run-${i}`}>
+              {/* Colored dashed border for non-overlapping area */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  height: "100%",
+                  borderRadius: "2px",
+                  minWidth: "3px",
+                  left: `${rLeft}%`,
+                  width: `${rWidth}%`,
+                  background: "transparent",
+                  border: `2px dashed ${rColor}`,
+                  boxSizing: "border-box",
+                  opacity: 0.7,
+                  clipPath,
+                }}
+              />
+              {/* White dashed border for the overlapping area */}
+              {hasOverlap && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    height: "100%",
+                    borderRadius: "2px",
+                    minWidth: "3px",
+                    left: `${rLeft}%`,
+                    width: `${rWidth}%`,
+                    background: "transparent",
+                    border: "2px dashed rgba(255, 255, 255, 0.85)",
+                    boxSizing: "border-box",
+                    clipPath: (() => {
+                      const localOverlapStart = ((overlapLeft - rLeft) / rWidth) * 100;
+                      const localOverlapEnd = ((overlapRight - rLeft) / rWidth) * 100;
+                      return `inset(0% ${100 - localOverlapEnd}% 0% ${localOverlapStart}%)`;
+                    })(),
+                  }}
+                />
+              )}
+              {/* Duration label */}
               {rWidth > 5 && (
                 <span
                   style={{
                     position: "absolute",
                     fontSize: "11px",
-                    color: "inherit",
+                    color: rColor,
                     fontWeight: 600,
                     top: "50%",
-                    left: "50%",
+                    left: `${rLeft + rWidth / 2}%`,
                     transform: "translate(-50%, -50%)",
                     whiteSpace: "nowrap",
                     pointerEvents: "none",
+                    zIndex: 1,
                   }}
                 >
                   {formatDurationLabel(rDuration)}
                 </span>
               )}
-            </div>
+            </React.Fragment>
           );
         })}
       </div>
@@ -407,7 +454,7 @@ export default function MiniGanttChart({
                   color: "#666",
                   fontWeight: 600,
                   whiteSpace: "nowrap",
-                  transform: "translateX(-50%)",
+                  transform: getLabelAlignment(marker.pct).transform,
                   lineHeight: "1.2",
                 }}
                 title={marker.fullName}
@@ -421,31 +468,40 @@ export default function MiniGanttChart({
 
       {/* Time axis */}
       <div style={axisStyle}>
-        {ticks.map((tick, i) => (
-          <span
-            key={i}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: `${tick.pct}%`,
-              fontSize: "11px",
-              color: "#999",
-              transform: "translateX(-50%)",
-            }}
-          >
+        {ticks.map((tick, i) => {
+          const isFirst = i === 0;
+          const isLast = i === tickCount;
+          const tickTransform = isFirst
+            ? "translateX(0)"
+            : isLast
+              ? "translateX(-100%)"
+              : "translateX(-50%)";
+          return (
             <span
+              key={i}
               style={{
                 position: "absolute",
-                top: "-4px",
-                left: "50%",
-                width: "1px",
-                height: "4px",
-                background: "#c8c8c8",
+                top: 0,
+                left: `${tick.pct}%`,
+                fontSize: "11px",
+                color: "#999",
+                transform: tickTransform,
               }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-4px",
+                  left: "50%",
+                  width: "1px",
+                  height: "4px",
+                  background: "#c8c8c8",
+                }}
             />
             {tick.label}
           </span>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -13,9 +13,9 @@ export interface ResultsFiltersProps {
 
 const INITIAL_FILTERS: TestResultsFilters = {
   executionSystem: null,
-  requirement: null,
+  requirement: "Required",
   status: null,
-  scope: null,
+  scope: "Global",
 };
 
 interface ToggleGroupProps {

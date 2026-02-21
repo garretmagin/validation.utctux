@@ -209,6 +209,7 @@ public class BackgroundJobManager
             EndTime = tp.EndTime,
             Duration = tp.Duration,
             DetailsUrl = tp.DetailsUrl,
+            SchedulePipelineUrl = tp.SchedulePipelineUrl,
             Type = tp.TestpassType,
             Scope = tp.TestpassScope,
             DependentChunks = tp.DependentChunks,

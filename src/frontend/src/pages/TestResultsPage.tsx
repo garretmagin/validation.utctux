@@ -28,16 +28,24 @@ function matchesStatus(tp: TestpassDto, statusFilter: string): boolean {
   }
 }
 
+// Counter to ensure each click triggers useEffect even for the same testpass
+let expandCounter = 0;
+
 export default function TestResultsPage() {
   const { fqbn } = useParams<{ fqbn?: string }>();
   const navigate = useNavigate();
   const { status, progress, results, error, isTimeout, refresh } = useTestResults(fqbn);
   const [filters, setFilters] = useState<TestResultsFilters>({
     executionSystem: null,
-    requirement: null,
+    requirement: "Required",
     status: null,
-    scope: null,
+    scope: "Global",
   });
+  const [expandTestpass, setExpandTestpass] = useState<string | null>(null);
+
+  const onGanttBarClick = useCallback((name: string) => {
+    setExpandTestpass(`${name}\0${++expandCounter}`);
+  }, []);
 
   const filteredTestpasses = useMemo(() => {
     if (!results?.testpasses) return [];
@@ -123,7 +131,7 @@ export default function TestResultsPage() {
             <SummaryDashboard
               buildInfo={results.buildInfo}
               summary={results.summary}
-              testpasses={filteredTestpasses}
+              testpasses={results.testpasses}
               timeRange={results.timeRange}
             />
 
@@ -135,11 +143,13 @@ export default function TestResultsPage() {
               <GanttChart
                 testpasses={filteredTestpasses}
                 timeRange={results.timeRange}
+                onBarClick={onGanttBarClick}
+                buildStartTime={results.buildInfo.registrationDate}
               />
             </div>
 
             <Card className="flex-grow margin-top-16">
-              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.registrationDate} />
+              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.registrationDate} expandTestpass={expandTestpass} />
             </Card>
           </>
         )}

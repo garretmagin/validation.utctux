@@ -66,6 +66,18 @@
   color: rgba(0, 0, 0, 0.9);
 }
 
+.gantt-pipeline-link {
+  color: #aaa;
+  text-decoration: none;
+  vertical-align: middle;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.gantt-pipeline-link:hover {
+  color: #0078d4;
+}
+
 .gantt-track {
   flex: 1;
   position: relative;
@@ -215,6 +227,28 @@
 
 .gantt-tooltip-label {
   color: rgba(255, 255, 255, 0.7);
+}
+
+.gantt-tooltip-separator {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 4px 0;
+}
+
+.gantt-tooltip-chunk {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.gantt-tooltip-chunk-name {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gantt-tooltip-chunk-detail {
+  color: rgba(255, 255, 255, 0.7);
+  text-align: right;
 }
 
 /* Legend */

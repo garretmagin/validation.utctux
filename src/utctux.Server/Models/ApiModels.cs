@@ -52,6 +52,7 @@ public record TestpassDto
     public DateTimeOffset? EndTime { get; init; }
     public TimeSpan? Duration { get; init; }
     public string? DetailsUrl { get; init; }
+    public string? SchedulePipelineUrl { get; init; }
     public string? Type { get; init; }
     public string? Scope { get; init; }
     public IReadOnlyList<ChunkAvailabilityInfo> DependentChunks { get; init; } = [];

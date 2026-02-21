@@ -6,6 +6,8 @@ import "./GanttChart.css";
 interface GanttChartProps {
   testpasses: TestpassDto[];
   timeRange: { min: string | null; max: string | null };
+  onBarClick?: (testpassName: string) => void;
+  buildStartTime?: string | null;
 }
 
 function parseDuration(duration: string): number {
@@ -158,13 +160,15 @@ function GanttBar({
   leftPercent,
   widthPercent,
   durationText,
-  index,
+  onBarClick,
+  buildStartTime,
 }: {
   tp: TestpassDto;
   leftPercent: number;
   widthPercent: number;
   durationText: string;
-  index: number;
+  onBarClick?: (testpassName: string) => void;
+  buildStartTime?: string | null;
 }){
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -181,13 +185,13 @@ function GanttBar({
 
   return (
     <>
-      <a href={`#testpass-${index}`} style={{ display: "contents" }}>
       <div
         className={`gantt-bar ${statusClass}`}
         style={{
           left: `${leftPercent.toFixed(2)}%`,
           width: `${widthPercent.toFixed(2)}%`,
         }}
+        onClick={() => onBarClick?.(tp.name)}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
       >
@@ -223,10 +227,39 @@ function GanttBar({
               <span className="gantt-tooltip-label">Scope:</span>
               <span>{tooltipData.scope}</span>
             </div>
+            {tp.dependentChunks && tp.dependentChunks.length > 0 && (
+              <>
+                <div className="gantt-tooltip-separator" />
+                <div className="gantt-tooltip-row">
+                  <strong>Dependent Chunks</strong>
+                </div>
+                {[...tp.dependentChunks].sort((a, b) => {
+                  if (!a.availableAt && !b.availableAt) return 0;
+                  if (!a.availableAt) return 1;
+                  if (!b.availableAt) return -1;
+                  return new Date(a.availableAt).getTime() - new Date(b.availableAt).getTime();
+                }).map((chunk, ci) => (
+                  <div key={ci} className="gantt-tooltip-chunk">
+                    <span className="gantt-tooltip-chunk-name">{chunk.chunkName}</span>
+                    <span className="gantt-tooltip-chunk-detail">
+                      {chunk.availableAt ? formatTime(chunk.availableAt) : "—"}
+                      {chunk.availableAfterBuildStart
+                        ? ` (T+${chunk.availableAfterBuildStart})`
+                        : buildStartTime && chunk.availableAt
+                          ? ` (T+${formatDuration(
+                              (new Date(chunk.availableAt).getTime() -
+                                new Date(buildStartTime).getTime()) /
+                                1000
+                            )})`
+                          : ""}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
-      </a>
       {durationText && (
         <span
           className="gantt-duration"
@@ -239,7 +272,7 @@ function GanttBar({
   );
 }
 
-export default function GanttChart({ testpasses, timeRange }: GanttChartProps) {
+export default function GanttChart({ testpasses, timeRange, onBarClick, buildStartTime }: GanttChartProps) {
   const minTime = useMemo(() => new Date(timeRange.min ?? 0).getTime(), [timeRange.min]);
   const maxTime = useMemo(() => new Date(timeRange.max ?? 0).getTime(), [timeRange.max]);
   const totalSeconds = useMemo(
@@ -356,7 +389,8 @@ export default function GanttChart({ testpasses, timeRange }: GanttChartProps) {
                     leftPercent={leftPercent}
                     widthPercent={widthPercent}
                     durationText={durationText}
-                    index={i}
+                    onBarClick={onBarClick}
+                    buildStartTime={buildStartTime}
                   />
                 </div>
               </div>

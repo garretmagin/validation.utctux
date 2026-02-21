@@ -70,19 +70,43 @@ function formatDelta(timeSpanStr: string | null): { text: string; color: string 
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
   try {
-    return new Date(value).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    const d = new Date(value);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   } catch {
     return value;
   }
 }
 
-function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
+function formatOffset(value: string | null, buildStart: string | null): React.ReactNode {
+  if (!value || !buildStart) return null;
+  try {
+    const diffMs = new Date(value).getTime() - new Date(buildStart).getTime();
+    if (diffMs < 0) return null;
+    const totalMin = Math.floor(diffMs / 60000);
+    const hrs = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    let label: string;
+    if (hrs === 0 && mins === 0) label = "T+0";
+    else if (hrs === 0) label = `T+${mins}m`;
+    else if (mins === 0) label = `T+${hrs}h`;
+    else label = `T+${hrs}h ${mins}m`;
+    return (
+      <span style={{ color: "#888", fontSize: "0.85em", marginLeft: "6px" }}>
+        ({label})
+      </span>
+    );
+  } catch {
+    return null;
+  }
+}
+
+function DependenciesTable({ chunks, buildRegistrationDate }: { chunks: ChunkAvailabilityDto[]; buildRegistrationDate: string | null }) {
   if (!chunks || chunks.length === 0) {
     return (
       <div style={{ fontStyle: "italic", color: "#999", fontSize: "13px" }}>
@@ -112,7 +136,9 @@ function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
               <tr key={i}>
                 <td style={tdStyle}>{chunk.chunkName}</td>
                 <td style={tdStyle}>{chunk.flavor || "—"}</td>
-                <td style={tdStyle}>{formatDateTime(chunk.availableAt)}</td>
+                <td style={tdStyle}>
+                  {formatDateTime(chunk.availableAt)}
+                </td>
                 <td style={tdStyle}>
                   <span style={{ color: delta.color }}>{delta.text}</span>
                 </td>
@@ -125,7 +151,7 @@ function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
   );
 }
 
-function RunsTable({ runs, currentName }: { runs: TestpassDto[]; currentName: string }) {
+function RunsTable({ runs, currentName, buildRegistrationDate }: { runs: TestpassDto[]; currentName: string; buildRegistrationDate: string | null }) {
   if (!runs || runs.length === 0) return null;
 
   return (
@@ -174,8 +200,12 @@ function RunsTable({ runs, currentName }: { runs: TestpassDto[]; currentName: st
                     </span>
                   )}
                 </td>
-                <td style={tdStyle}>{formatDateTime(run.startTime)}</td>
-                <td style={tdStyle}>{formatDateTime(run.endTime)}</td>
+                <td style={tdStyle}>
+                  {formatDateTime(run.startTime)}
+                </td>
+                <td style={tdStyle}>
+                  {formatDateTime(run.endTime)}
+                </td>
                 <td style={tdStyle}>{run.rerunOwner || "—"}</td>
                 <td style={tdStyle}>{run.rerunReason || "—"}</td>
               </tr>
@@ -194,8 +224,8 @@ export default function TestpassDetailPanel({
   return (
     <div style={panelStyle}>
       <div style={tableContainerStyle}>
-        <DependenciesTable chunks={testpass.dependentChunks} />
-        <RunsTable runs={testpass.runs} currentName={testpass.name} />
+        <DependenciesTable chunks={testpass.dependentChunks} buildRegistrationDate={buildRegistrationDate} />
+        <RunsTable runs={testpass.runs} currentName={testpass.name} buildRegistrationDate={buildRegistrationDate} />
       </div>
       <div style={ganttContainerStyle}>
         <MiniGanttChart testpass={testpass} buildRegistrationDate={buildRegistrationDate} />

@@ -77,8 +77,9 @@ export default function StatusPanel({
     <Card
       className="flex-grow margin-top-16"
       titleProps={{ text: "Data Gathering Progress" }}
+      contentProps={{ style: { display: "flex", flexDirection: "column" as const } }}
     >
-      <div className="flex-column padding-16" style={{ gap: "12px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px" }}>
         <div className="flex-row" style={{ alignItems: "center", gap: "8px" }}>
           <Status
             {...getStatusIndicator(status)}
@@ -124,7 +125,9 @@ export default function StatusPanel({
               fontSize: "12px",
               backgroundColor: "var(--palette-neutral-2, #f4f4f4)",
               borderRadius: "4px",
-              padding: "8px",
+              padding: "12px 16px",
+              width: "100%",
+              boxSizing: "border-box",
             }}
           >
             {progress.map((msg, i) => {

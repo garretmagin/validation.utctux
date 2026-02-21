@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, Fragment } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from "react";
 import { Status, Statuses, StatusSize } from "azure-devops-ui/Status";
 import { Icon } from "azure-devops-ui/Icon";
 import type { TestpassDto } from "../types/testResults";
@@ -7,6 +7,7 @@ import TestpassDetailPanel from "./TestpassDetailPanel";
 export interface TestpassTableProps {
   testpasses: TestpassDto[];
   buildRegistrationDate: string | null;
+  expandTestpass?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -16,6 +17,15 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const DEFAULT_STATUS_COLOR = "#a0a0a0";
+
+const ES_STYLES: Record<string, React.CSSProperties> = {
+  CloudTest: { background: "#eff6fc", color: "#005a9e", border: "1px solid #005a9e" },
+  T3C: { background: "#e8f5e9", color: "#2e7d32", border: "1px solid #2e7d32" },
+};
+
+const DEFAULT_ES_STYLE: React.CSSProperties = {
+  border: "1px solid var(--palette-neutral-30, #ccc)",
+};
 
 function getStatusProps(result: string) {
   switch (result) {
@@ -33,15 +43,65 @@ function getStatusProps(result: string) {
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
   try {
-    return new Date(value).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    const d = new Date(value);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   } catch {
     return value;
+  }
+}
+
+function formatDuration(value: string | null): string {
+  if (!value) return "\u2014";
+  // Parse .NET TimeSpan: "HH:MM:SS", "D.HH:MM:SS", or "HH:MM:SS.fff"
+  const parts = value.split(":");
+  if (parts.length < 2) return value;
+
+  let hours = 0;
+  let minutes = 0;
+  let seconds = 0;
+
+  if (parts[0].includes(".")) {
+    const [days, h] = parts[0].split(".");
+    hours = parseInt(days, 10) * 24 + parseInt(h, 10);
+  } else {
+    hours = parseInt(parts[0], 10);
+  }
+  minutes = parseInt(parts[1], 10);
+  seconds = Math.round(parseFloat(parts[2] ?? "0"));
+
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h`;
+  if (minutes > 0 && seconds > 0) return `${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+function formatOffset(value: string | null, buildStart: string | null): React.ReactNode {
+  if (!value || !buildStart) return null;
+  try {
+    const diffMs = new Date(value).getTime() - new Date(buildStart).getTime();
+    if (diffMs < 0) return null;
+    const totalMin = Math.floor(diffMs / 60000);
+    const hrs = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    let label: string;
+    if (hrs === 0 && mins === 0) label = "T+0";
+    else if (hrs === 0) label = `T+${mins}m`;
+    else if (mins === 0) label = `T+${hrs}h`;
+    else label = `T+${hrs}h ${mins}m`;
+    return (
+      <span style={{ color: "#888", fontSize: "0.85em", marginLeft: "6px" }}>
+        ({label})
+      </span>
+    );
+  } catch {
+    return null;
   }
 }
 
@@ -67,8 +127,25 @@ const cellStyle: React.CSSProperties = {
 export default function TestpassTable({
   testpasses,
   buildRegistrationDate,
+  expandTestpass,
 }: TestpassTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+
+  useEffect(() => {
+    if (!expandTestpass) return;
+    const name = expandTestpass.split("\0")[0];
+    setExpandedRows((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
+      return next;
+    });
+    requestAnimationFrame(() => {
+      const el = rowRefs.current.get(name);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [expandTestpass]);
 
   const toggleExpand = useCallback((name: string) => {
     setExpandedRows((prev) => {
@@ -117,6 +194,7 @@ export default function TestpassTable({
           return (
             <Fragment key={tp.name}>
               <tr
+                ref={(el) => { if (el) rowRefs.current.set(tp.name, el); }}
                 style={{ cursor: hasDetails ? "pointer" : undefined }}
                 onClick={hasDetails ? () => toggleExpand(tp.name) : undefined}
               >
@@ -169,6 +247,18 @@ export default function TestpassTable({
                     ) : (
                       <span>{tp.name}</span>
                     )}
+                    {tp.schedulePipelineUrl && (
+                      <a
+                        href={tp.schedulePipelineUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Schedule Pipeline"
+                        style={{ color: "#aaa", textDecoration: "none", verticalAlign: "middle", marginLeft: "4px", flexShrink: 0 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-2px" }}><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>
+                      </a>
+                    )}
                   </div>
                 </td>
                 <td style={cellStyle}>{tp.requirement || "\u2014"}</td>
@@ -180,7 +270,8 @@ export default function TestpassTable({
                         padding: "2px 8px",
                         borderRadius: "10px",
                         fontSize: "12px",
-                        border: "1px solid var(--palette-neutral-30, #ccc)",
+                        fontWeight: 600,
+                        ...(ES_STYLES[tp.executionSystem] ?? DEFAULT_ES_STYLE),
                       }}
                     >
                       {tp.executionSystem}
@@ -189,9 +280,15 @@ export default function TestpassTable({
                     "\u2014"
                   )}
                 </td>
-                <td style={cellStyle}>{formatDateTime(tp.startTime)}</td>
-                <td style={cellStyle}>{formatDateTime(tp.endTime)}</td>
-                <td style={cellStyle}>{tp.duration ?? "\u2014"}</td>
+                <td style={cellStyle}>
+                  {formatDateTime(tp.startTime)}
+                  {formatOffset(tp.startTime, buildRegistrationDate)}
+                </td>
+                <td style={cellStyle}>
+                  {formatDateTime(tp.endTime)}
+                  {formatOffset(tp.endTime, buildRegistrationDate)}
+                </td>
+                <td style={cellStyle}>{formatDuration(tp.duration) ?? "\u2014"}</td>
               </tr>
               {isExpanded && (
                 <tr>

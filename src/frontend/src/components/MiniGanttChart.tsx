@@ -331,11 +331,12 @@ export default function MiniGanttChart({
   // --- Time axis ticks (snapped to 15-min boundaries) ---
   const totalSpanSec = totalSpanMs / 1000;
   const tickStep = (() => {
-    if (totalSpanSec <= 1800) return 300;       // ≤ 30 min → every 5 min
-    if (totalSpanSec <= 5400) return 900;       // ≤ 1.5h → every 15 min
-    if (totalSpanSec <= 10800) return 1800;     // ≤ 3h → every 30 min
-    if (totalSpanSec <= 28800) return 3600;     // ≤ 8h → every 1 hour
-    return 7200;                                // > 8h → every 2 hours
+    // Nice round intervals; pick the smallest that keeps total ticks ≤ 12
+    const candidates = [300, 900, 1800, 3600, 7200, 14400, 21600, 43200, 86400];
+    for (const step of candidates) {
+      if (Math.floor(totalSpanSec / step) <= 12) return step;
+    }
+    return 86400;
   })();
   const ticks: { pct: number; label: string }[] = [];
   for (let s = 0; s <= totalSpanSec; s += tickStep) {

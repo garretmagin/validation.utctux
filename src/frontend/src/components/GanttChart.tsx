@@ -54,12 +54,22 @@ function formatElapsedTime(seconds: number): string {
 }
 
 function calculateTickStep(totalSeconds: number): number {
-  // Choose a step that aligns to nice round boundaries (0, 15, 30, 45 min)
-  if (totalSeconds <= 1800) return 300;       // ≤ 30 min → every 5 min
-  if (totalSeconds <= 5400) return 900;       // ≤ 1.5h → every 15 min
-  if (totalSeconds <= 10800) return 1800;     // ≤ 3h → every 30 min
-  if (totalSeconds <= 28800) return 3600;     // ≤ 8h → every 1 hour
-  return 7200;                                // > 8h → every 2 hours
+  // Nice round intervals; pick the smallest that keeps total ticks ≤ 12
+  const candidates = [
+    300,    // 5 min
+    900,    // 15 min
+    1800,   // 30 min
+    3600,   // 1 hour
+    7200,   // 2 hours
+    14400,  // 4 hours
+    21600,  // 6 hours
+    43200,  // 12 hours
+    86400,  // 24 hours
+  ];
+  for (const step of candidates) {
+    if (Math.floor(totalSeconds / step) <= 12) return step;
+  }
+  return 86400;
 }
 
 function getStatusClass(tp: TestpassDto): string {

@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="utctux.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Common.DiscoverClient" Version="3.0.120" />
     <PackageReference Include="Common.MsalAuth" Version="3.0.71" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />

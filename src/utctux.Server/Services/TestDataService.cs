@@ -35,7 +35,7 @@ public class TestDataService
     /// <summary>
     /// Loads and aggregates test results from UTCT, CloudTest, and Nova for a given FQBN.
     /// </summary>
-    public async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildRegistrationDate)> LoadTestResultsAsync(
+    public virtual async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildRegistrationDate)> LoadTestResultsAsync(
         string fqbn,
         IProgress<string>? progress = null,
         bool loadChunkData = true,
@@ -143,7 +143,7 @@ public class TestDataService
         }
     }
 
-    private static string ExtractOrganizationName(string adoOrgValue)
+    internal static string ExtractOrganizationName(string adoOrgValue)
     {
         if (Uri.TryCreate(adoOrgValue, UriKind.Absolute, out var uri))
         {
@@ -220,7 +220,7 @@ public class TestDataService
         }
     }
 
-    private List<AggregatedTestpassResult> AggregateResults(
+    internal List<AggregatedTestpassResult> AggregateResults(
         IReadOnlyList<UtctTestpass> summaryList,
         IReadOnlyList<TestSession> cloudTestData,
         List<NovaTestpass> novaData,
@@ -353,7 +353,7 @@ public class TestDataService
         return lookup;
     }
 
-    private static IReadOnlyList<ChunkAvailabilityInfo> ResolveChunkAvailability(
+    internal static IReadOnlyList<ChunkAvailabilityInfo> ResolveChunkAvailability(
         IReadOnlyList<TestpassDependency>? dependencies,
         Dictionary<string, ChunkAvailabilityInfo> lookup)
     {

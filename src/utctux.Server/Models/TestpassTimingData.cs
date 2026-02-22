@@ -65,9 +65,16 @@ public class TestpassTimingData
 
         DetailsUrl = result.ExecutionSystemDetailsUri?.ToString() ?? "";
 
-        SchedulePipelineUrl = result.TestpassSummary?.AzureDevOpsTenant is not null
-            ? result.TestpassSummary.AzureDevOpsTaskUri?.ToString() ?? ""
-            : "";
+        try
+        {
+            SchedulePipelineUrl = result.TestpassSummary?.AzureDevOpsTenant is not null
+                ? result.TestpassSummary.AzureDevOpsTaskUri?.ToString() ?? ""
+                : "";
+        }
+        catch (UriFormatException)
+        {
+            SchedulePipelineUrl = "";
+        }
 
         if (result.TestpassSummary?.ExecutionSystem == UtctClient.Data.Common.ExecutionSystem.CloudTest && result.TestSession is not null)
         {

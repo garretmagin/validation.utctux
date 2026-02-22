@@ -106,9 +106,16 @@ public class AggregatedTestpassResult
                 return new Uri($"https://es.microsoft.com/Nova/Testpass/Details/{NovaTestpass.TestPassGuid}");
             }
 
-            if (TestpassSummary?.ExecutionSystemDetailsUri is not null)
+            try
             {
-                return TestpassSummary.ExecutionSystemDetailsUri;
+                if (TestpassSummary?.ExecutionSystemDetailsUri is not null)
+                {
+                    return TestpassSummary.ExecutionSystemDetailsUri;
+                }
+            }
+            catch (UriFormatException)
+            {
+                // SDK may throw if CloudTest tenant data is incomplete
             }
 
             return null;

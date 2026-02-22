@@ -157,7 +157,7 @@ public class BackgroundJobManager
         }
     }
 
-    private static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildRegistrationDate)
+    internal static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildRegistrationDate)
     {
         int passed = 0, failed = 0, running = 0, unknown = 0;
         DateTimeOffset? earliest = null;
@@ -196,7 +196,7 @@ public class BackgroundJobManager
         };
     }
 
-    private static TestpassDto MapTestpass(TestpassTimingData tp)
+    internal static TestpassDto MapTestpass(TestpassTimingData tp)
     {
         return new TestpassDto
         {

@@ -151,7 +151,11 @@ public class AggregatedTestpassResult
 
             if (TestpassSummary.ExecutionSystem == ExecutionSystem.CloudTest)
             {
-                return TestSession?.Result ?? "Unknown";
+                var ctResult = TestSession?.Result ?? "Unknown";
+                // CloudTest "FailedNonFatal" is still a failure — normalize to "Failed"
+                return string.Equals(ctResult, "FailedNonFatal", StringComparison.OrdinalIgnoreCase)
+                    ? "Failed"
+                    : ctResult;
             }
             else
             {

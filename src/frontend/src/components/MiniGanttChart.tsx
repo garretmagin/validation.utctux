@@ -328,14 +328,20 @@ export default function MiniGanttChart({
     allRuns.push({ run: testpass, isCurrent: true });
   }
 
-  // --- Time axis ticks ---
-  const tickCount = 6;
+  // --- Time axis ticks (snapped to 15-min boundaries) ---
+  const totalSpanSec = totalSpanMs / 1000;
+  const tickStep = (() => {
+    if (totalSpanSec <= 1800) return 300;       // ≤ 30 min → every 5 min
+    if (totalSpanSec <= 5400) return 900;       // ≤ 1.5h → every 15 min
+    if (totalSpanSec <= 10800) return 1800;     // ≤ 3h → every 30 min
+    if (totalSpanSec <= 28800) return 3600;     // ≤ 8h → every 1 hour
+    return 7200;                                // > 8h → every 2 hours
+  })();
   const ticks: { pct: number; label: string }[] = [];
-  for (let i = 0; i <= tickCount; i++) {
-    const pct = (i / tickCount) * 100;
-    const seconds = (totalSpanMs * (i / tickCount)) / 1000;
-    ticks.push({ pct, label: formatTickTime(seconds) });
+  for (let s = 0; s <= totalSpanSec; s += tickStep) {
+    ticks.push({ pct: (s / totalSpanSec) * 100, label: formatTickTime(s) });
   }
+  const tickCount = ticks.length - 1;
 
   const hasChunks = chunks.length > 0;
 

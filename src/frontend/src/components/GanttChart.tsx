@@ -53,11 +53,13 @@ function formatElapsedTime(seconds: number): string {
   return `T+${hrs}h${mins}m`;
 }
 
-function calculateTimeIntervals(totalSeconds: number): number {
-  if (totalSeconds <= 3600) return Math.max(Math.ceil(totalSeconds / 600), 2);
-  if (totalSeconds <= 7200) return 8;
-  if (totalSeconds <= 14400) return 8;
-  return 10;
+function calculateTickStep(totalSeconds: number): number {
+  // Choose a step that aligns to nice round boundaries (0, 15, 30, 45 min)
+  if (totalSeconds <= 1800) return 300;       // ≤ 30 min → every 5 min
+  if (totalSeconds <= 5400) return 900;       // ≤ 1.5h → every 15 min
+  if (totalSeconds <= 10800) return 1800;     // ≤ 3h → every 30 min
+  if (totalSeconds <= 28800) return 3600;     // ≤ 8h → every 1 hour
+  return 7200;                                // > 8h → every 2 hours
 }
 
 function getStatusClass(tp: TestpassDto): string {
@@ -99,18 +101,21 @@ interface TooltipData {
 function TimelineRuler({
   totalSeconds,
   bottom,
+  firstTestPercent,
+  firstTestLabel,
 }: {
   totalSeconds: number;
   bottom?: boolean;
+  firstTestPercent?: number;
+  firstTestLabel?: string;
 }) {
-  const intervals = calculateTimeIntervals(totalSeconds);
+  const step = calculateTickStep(totalSeconds);
   const marks = [];
-  for (let i = 0; i <= intervals; i++) {
-    const percent = (i * 100) / intervals;
-    const elapsed = (totalSeconds * i) / intervals;
+  for (let elapsed = 0; elapsed <= totalSeconds; elapsed += step) {
+    const percent = (elapsed / totalSeconds) * 100;
     marks.push(
       <span
-        key={i}
+        key={elapsed}
         className="gantt-timeline-mark"
         style={{ left: `${percent.toFixed(1)}%` }}
       >
@@ -141,6 +146,35 @@ function TimelineRuler({
           >
             Build Started
           </span>
+        )}
+        {firstTestPercent != null && firstTestLabel && !bottom && (
+          <span
+            style={{
+              position: "absolute",
+              left: `${firstTestPercent.toFixed(1)}%`,
+              transform: "rotate(-45deg)",
+              transformOrigin: "bottom left",
+              fontWeight: 600,
+              color: "#004578",
+              fontSize: "11px",
+              top: "-14px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            First Test ({firstTestLabel})
+          </span>
+        )}
+        {firstTestPercent != null && (
+          <span
+            style={{
+              position: "absolute",
+              left: `${firstTestPercent.toFixed(1)}%`,
+              top: 0,
+              bottom: 0,
+              borderLeft: "2px dashed #004578",
+              zIndex: 1,
+            }}
+          />
         )}
         <span
           className="gantt-build-started-line"
@@ -325,6 +359,20 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
       );
   }, [testpasses]);
 
+  // Compute first test marker position
+  const firstTestStartMs = sortedTestpasses.length > 0
+    ? new Date(sortedTestpasses[0].startTime!).getTime()
+    : null;
+  const firstTestOffsetSeconds = firstTestStartMs != null
+    ? (firstTestStartMs - minTime) / 1000
+    : null;
+  const firstTestPercent = firstTestOffsetSeconds != null && firstTestOffsetSeconds > 0
+    ? (firstTestOffsetSeconds / totalSeconds) * 100
+    : undefined;
+  const firstTestLabel = firstTestOffsetSeconds != null && firstTestOffsetSeconds > 0
+    ? formatElapsedTime(firstTestOffsetSeconds)
+    : undefined;
+
   if (sortedTestpasses.length === 0) {
     return null;
   }
@@ -382,7 +430,11 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
         </div>
 
         {/* Top ruler */}
-        <TimelineRuler totalSeconds={totalSeconds} />
+        <TimelineRuler
+          totalSeconds={totalSeconds}
+          firstTestPercent={firstTestPercent}
+          firstTestLabel={firstTestLabel}
+        />
 
         {/* Gantt rows */}
         <div className="gantt-rows">
@@ -437,7 +489,12 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
         </div>
 
         {/* Bottom ruler */}
-        <TimelineRuler totalSeconds={totalSeconds} bottom />
+        <TimelineRuler
+          totalSeconds={totalSeconds}
+          bottom
+          firstTestPercent={firstTestPercent}
+          firstTestLabel={firstTestLabel}
+        />
       </div>
     </Card>
   );

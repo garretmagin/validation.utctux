@@ -391,7 +391,7 @@ public class TestDataService
     /// </summary>
     private async Task BuildRunsListAsync(
         List<AggregatedTestpassResult> results,
-        UtctApiClient utctClient,
+        IUtctApiClient utctClient,
         IReadOnlyList<TestSession> cloudTestData)
     {
         var rerunCandidates = results
@@ -438,7 +438,7 @@ public class TestDataService
     /// </summary>
     private async Task ProcessResultRerunsAsync(
         AggregatedTestpassResult result,
-        UtctApiClient utctClient,
+        IUtctApiClient utctClient,
         IReadOnlyList<TestSession> cloudTestData)
     {
         var runs = new List<AggregatedTestpassResult>();

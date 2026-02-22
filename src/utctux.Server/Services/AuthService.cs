@@ -110,7 +110,7 @@ public class AuthService
     /// Gets a UTCT API client configured for the specified environment.
     /// Uses a token getter callback to acquire tokens on demand.
     /// </summary>
-    public UtctApiClient GetUtctApiClient(ApiEnvironment? apiEnvironment = null)
+    public IUtctApiClient GetUtctApiClient(ApiEnvironment? apiEnvironment = null)
     {
         var env = apiEnvironment ?? Enum.Parse<ApiEnvironment>(_options.UtctApiEnvironment);
         var connectionInfo = UtctApiClient.GetApiConnectionInfo(env);

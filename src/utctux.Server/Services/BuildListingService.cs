@@ -5,34 +5,20 @@ using utctux.Server.Models;
 namespace utctux.Server.Services;
 
 /// <summary>
-/// Lists branches and builds using the Discover client.
+/// Lists branches via the GitBranch API and builds using the Discover client.
 /// </summary>
-public class BuildListingService(AuthService authService, ILogger<BuildListingService> logger)
+public class BuildListingService(AuthService authService, GitBranchService gitBranchService, ILogger<BuildListingService> logger)
 {
     private const int DefaultBuildCount = 10;
     private const int MaxBuildCount = 100;
-    private const int BranchDiscoveryCount = 500;
     private readonly ILogger<BuildListingService> _logger = logger;
 
     /// <summary>
-    /// Gets distinct branch names from recent official builds.
+    /// Gets all non-defunct branch names from the GitBranch API.
     /// </summary>
     public async Task<string[]> GetBranchesAsync()
     {
-        var client = authService.GetDiscoverClient();
-
-        var search = new OfficialSearchParameterFactory()
-            .SetTop(BranchDiscoveryCount)
-            .SetOfficiality(true);
-
-        var builds = await client.SearchBuildsAsync(search);
-
-        return builds
-            .Select(b => b.Document?.Properties?.Definition?.Branch)
-            .Where(b => !string.IsNullOrEmpty(b))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToArray()!;
+        return await gitBranchService.GetBranchNamesAsync();
     }
 
     /// <summary>

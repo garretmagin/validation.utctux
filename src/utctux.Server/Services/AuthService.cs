@@ -22,6 +22,9 @@ public class AuthService
     public const string NovaApiScope = "https://mspmecloud.onmicrosoft.com/Es-novaapi/.default";
     public const string NovaApiBaseAddress = "https://api.es.microsoft.com/novaapi-pme/";
 
+    public const string GitBranchApiScope = "https://mspmecloud.onmicrosoft.com/os-branch-api/.default";
+    public const string GitBranchApiBaseAddress = "https://os-branch-api.azurefd.net/api/v1/";
+
     public const string AzureDevOpsScope = "499b84ac-1321-427f-aa17-267ca6975798/.default";
 
     private static readonly string AuthRecordPath = Path.Combine(
@@ -86,6 +89,16 @@ public class AuthService
     /// </summary>
     public T GetNovaApi<T>() where T : class =>
         RestService.For<T>(GetNovaHttpClient());
+
+    /// <summary>
+    /// Gets an authenticated <see cref="HttpClient"/> for the GitBranch API.
+    /// </summary>
+    public HttpClient GetGitBranchHttpClient()
+    {
+        var client = CreateAuthenticatedHttpClient(GitBranchApiScope);
+        client.BaseAddress = new Uri(GitBranchApiBaseAddress);
+        return client;
+    }
 
     /// <summary>
     /// Gets an authenticated <see cref="HttpClient"/> for Azure DevOps.

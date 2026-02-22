@@ -98,4 +98,43 @@ public class RerunDataTests(ITestOutputHelper output)
             .ToList();
         Assert.Equal(guids.Count, guids.Distinct().Count());
     }
+
+    [Fact]
+    public async Task LoadTestResults_SingleRunTestpass_HasExactlyOneRun()
+    {
+        // Arrange — a testpass known to have no reruns
+        const string singleRunFqbn = "29537.1000.main.260219-1510";
+        const string singleRunTestpassName = "WinBVT Container Manager [Enterprise-amd64-VMGen2-Containers-WinBVT]";
+
+        var svc = CreateTestDataService();
+        var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
+
+        // Act
+        var (results, _) = await svc.LoadTestResultsAsync(singleRunFqbn, progress);
+
+        // Assert — find the specific testpass
+        var testpass = results.FirstOrDefault(r =>
+            r.TestpassSummary?.TestpassName == singleRunTestpassName);
+
+        Assert.NotNull(testpass);
+        output.WriteLine($"Testpass: {testpass.TestpassSummary?.TestpassName}");
+        output.WriteLine($"IsRerun: {testpass.TestpassSummary?.IsRerun}");
+        output.WriteLine($"IsRerunsLikely: {testpass.IsRerunsLikely}");
+        output.WriteLine($"IsNovaRerunLikely: {testpass.IsNovaRerunLikely}");
+        output.WriteLine($"Runs count: {testpass.Runs.Count}");
+
+        foreach (var run in testpass.Runs)
+        {
+            var name = run.TestpassSummary?.TestpassName
+                ?? run.NovaTestpass?.TestPassName
+                ?? "Unknown";
+            output.WriteLine($"  Run: {name} | IsCurrentRun={run.IsCurrentRun}");
+        }
+
+        // Should have exactly 1 run (self-entry)
+        Assert.Equal(1, testpass.Runs.Count);
+
+        // The single run must be marked as current
+        Assert.True(testpass.Runs[0].IsCurrentRun);
+    }
 }

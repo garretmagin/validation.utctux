@@ -1,5 +1,5 @@
 import React from "react";
-import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
+import type { TestpassDto } from "../types/testResults";
 
 export interface MiniGanttChartProps {
   testpass: TestpassDto;
@@ -7,6 +7,9 @@ export interface MiniGanttChartProps {
 }
 
 // --- Helpers ---
+
+const ROW_HEIGHT = 24;
+const LABEL_WIDTH = 240;
 
 function formatTickTime(seconds: number): string {
   const hrs = Math.floor(seconds / 3600);
@@ -53,7 +56,7 @@ function formatDurationLabel(ms: number): string {
 }
 
 function truncate(str: string, max: number): string {
-  return str.length > max ? str.substring(0, max) + "..." : str;
+  return str.length > max ? str.substring(0, max) + "\u2026" : str;
 }
 
 function getBarColor(
@@ -61,25 +64,14 @@ function getBarColor(
   result: string,
   status: string
 ): string {
-  const es = executionSystem?.toLowerCase() ?? "";
   const res = result?.toLowerCase() ?? "";
   const st = status?.toLowerCase() ?? "";
   if (st === "running" || st === "inprogress") return "running";
   if (res === "failed" || res === "aborted") return "#cd2535";
-  if (es.includes("cloudtest")) {
-    return res === "passed" ? "#107c10" : "#0078d4";
-  }
-  if (es.includes("t3c")) {
-    return res === "passed" ? "#2e7d32" : "#0078d4";
-  }
+  const es = executionSystem?.toLowerCase() ?? "";
+  if (es.includes("cloudtest")) return res === "passed" ? "#107c10" : "#0078d4";
+  if (es.includes("t3c")) return res === "passed" ? "#2e7d32" : "#0078d4";
   return res === "passed" ? "#107c10" : "#0078d4";
-}
-
-function getRerunBorderColor(result: string): string {
-  const res = result?.toLowerCase() ?? "";
-  if (res === "failed" || res === "aborted") return "#cd2535";
-  if (res === "passed") return "#107c10";
-  return "#0078d4";
 }
 
 // --- Styles ---
@@ -88,231 +80,160 @@ const containerStyle: React.CSSProperties = {
   background: "#fff",
   border: "1px solid #ebebeb",
   borderRadius: "4px",
-  padding: "12px 16px 20px",
+  padding: "12px 16px 16px",
   position: "relative",
+  fontSize: "12px",
 };
 
-const markersRowStyle: React.CSSProperties = {
-  position: "relative",
-  height: "20px",
-  marginBottom: "2px",
+const rowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  height: `${ROW_HEIGHT}px`,
+  borderBottom: "1px solid #f0f0f0",
 };
 
-const trackStyle: React.CSSProperties = {
-  position: "relative",
-  height: "28px",
-  background: "#f4f4f4",
-  borderRadius: "2px",
-  marginBottom: "4px",
+const labelCellStyle: React.CSSProperties = {
+  width: `${LABEL_WIDTH}px`,
+  minWidth: `${LABEL_WIDTH}px`,
+  paddingRight: "8px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  fontSize: "12px",
+  color: "#444",
+  flexShrink: 0,
 };
 
-const axisStyle: React.CSSProperties = {
+const trackCellStyle: React.CSSProperties = {
+  flex: 1,
   position: "relative",
-  height: "18px",
-  borderTop: "1px solid #dedede",
-  marginTop: "4px",
+  height: "100%",
+  minWidth: 0,
 };
 
-// --- Component ---
+// --- Sub-components ---
 
-interface MarkerInfo {
+function ChunkRow({
+  chunkName,
+  pct,
+  deltaLabel,
+}: {
+  chunkName: string;
   pct: number;
-  label: string;
-  fullName: string;
   deltaLabel: string;
-}
-
-function getLabelAlignment(pct: number): { transform: string; textAlign: string } {
-  if (pct < 10) return { transform: "translateX(4px)", textAlign: "left" };
-  if (pct > 90) return { transform: "translateX(calc(-100% - 4px))", textAlign: "right" };
-  return { transform: "translateX(-50%)", textAlign: "center" };
-}
-
-function computeMarkerRows(markers: MarkerInfo[]): { marker: MarkerInfo; row: number }[] {
-  // Simple collision avoidance: if two labels are within 15% of each other, bump to next row
-  const sorted = [...markers].sort((a, b) => a.pct - b.pct);
-  const result: { marker: MarkerInfo; row: number }[] = [];
-  for (const m of sorted) {
-    let row = 0;
-    for (const placed of result) {
-      if (placed.row === row && Math.abs(placed.marker.pct - m.pct) < 15) {
-        row = Math.max(row, placed.row + 1);
-      }
-    }
-    result.push({ marker: m, row });
-  }
-  return result;
-}
-
-export default function MiniGanttChart({
-  testpass,
-  buildRegistrationDate,
-}: MiniGanttChartProps) {
-  if (!testpass.startTime) {
-    return (
-      <div style={{ ...containerStyle, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80px" }}>
-        <span style={{ fontStyle: "italic", color: "#999", fontSize: "13px" }}>
-          No timing data available
-        </span>
-      </div>
-    );
-  }
-
-  const buildStart = buildRegistrationDate
-    ? new Date(buildRegistrationDate).getTime()
-    : new Date(testpass.startTime).getTime();
-
-  const tpStart = new Date(testpass.startTime).getTime();
-  const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();
-
-  // Find latest end and earliest start across testpass and all runs
-  let latestEnd = tpEnd;
-  if (testpass.runs) {
-    for (const run of testpass.runs) {
-      if (run.endTime) {
-        latestEnd = Math.max(latestEnd, new Date(run.endTime).getTime());
-      }
-    }
-  }
-
-  // Total timeline span with 5% padding
-  const rawSpan = latestEnd - buildStart;
-  const totalSpanMs = rawSpan > 0 ? rawSpan * 1.05 : 60000;
-
-  const toPct = (timeMs: number) =>
-    Math.max(0, Math.min(100, ((timeMs - buildStart) / totalSpanMs) * 100));
-
-  // --- Dependency markers ---
-  const markers: MarkerInfo[] = [];
-  if (testpass.dependentChunks) {
-    for (const chunk of testpass.dependentChunks) {
-      const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
-      if (deltaMs == null) continue;
-      const pct = toPct(buildStart + deltaMs);
-      markers.push({
-        pct,
-        label: truncate(chunk.chunkName, 20),
-        fullName: chunk.chunkName,
-        deltaLabel: formatDeltaShort(deltaMs),
-      });
-    }
-  }
-
-  const markerRows = computeMarkerRows(markers);
-  const maxRow = markerRows.length > 0 ? Math.max(...markerRows.map((r) => r.row)) : -1;
-  const markerLabelsHeight = (maxRow + 1) * 16 + 4;
-
-  // --- Execution bar ---
-  const barLeft = toPct(tpStart);
-  const barRight = toPct(tpEnd);
-  const barWidth = Math.max(barRight - barLeft, 0.3);
-  const durationMs = tpEnd - tpStart;
-  const barColor = getBarColor(testpass.executionSystem, testpass.result, testpass.status);
-  const isRunning = barColor === "running";
-
-  const barStyle: React.CSSProperties = {
-    position: "absolute",
-    top: 0,
-    height: "100%",
-    borderRadius: "2px",
-    minWidth: "3px",
-    left: `${barLeft}%`,
-    width: `${barWidth}%`,
-    background: isRunning
-      ? "repeating-linear-gradient(-45deg, #0078d4, #0078d4 4px, #5ba0d6 4px, #5ba0d6 8px)"
-      : barColor,
-    opacity: 0.9,
-  };
-
-  // --- Time axis ticks (8 intervals = 9 ticks) ---
-  const tickCount = 8;
-  const ticks: { pct: number; label: string }[] = [];
-  for (let i = 0; i <= tickCount; i++) {
-    const pct = (i / tickCount) * 100;
-    const seconds = (totalSpanMs * (i / tickCount)) / 1000;
-    ticks.push({ pct, label: formatTickTime(seconds) });
-  }
-
-  // --- Non-primary run bars (exclude current since it's already the main bar) ---
-  const nonPrimaryRuns = (testpass.runs ?? []).filter((r) => !r.isCurrentRun);
-
+}) {
   return (
-    <div style={containerStyle}>
-      {/* Section label */}
-      <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
-        Timeline from Build Start
+    <div style={rowStyle} title={`${chunkName}: ${deltaLabel}`}>
+      <div style={labelCellStyle} title={chunkName}>
+        {truncate(chunkName, 40)}
       </div>
-
-      {/* Dependency diamond markers row */}
-      {markers.length > 0 && (
-        <div style={markersRowStyle}>
-          {markers.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: `${m.pct}%`,
-                transform: "translateX(-50%)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-              }}
-              title={`${m.fullName}: ${m.deltaLabel}`}
-            >
-              <div
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  background: "#0078d4",
-                  transform: "rotate(45deg)",
-                  border: "1px solid #106ebe",
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Execution track */}
-      <div style={trackStyle}>
-        {/* Marker lines through the track */}
-        {markers.map((m, i) => (
-          <div
-            key={`line-${i}`}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: `${m.pct}%`,
-              width: "1px",
-              height: "100%",
-              background: "#0078d4",
-              opacity: 0.4,
-              transform: "translateX(-50%)",
-            }}
-          />
-        ))}
-
-        {/* Build start marker */}
+      <div style={trackCellStyle}>
+        {/* Horizontal guide line from 0 to diamond */}
         <div
           style={{
             position: "absolute",
-            top: 0,
+            top: "50%",
             left: 0,
-            width: "2px",
-            height: "100%",
-            background: "#004578",
-            opacity: 0.6,
+            width: `${pct}%`,
+            height: "1px",
+            background: "#c8d6e5",
           }}
         />
+        {/* Diamond marker */}
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: `${pct}%`,
+            width: "8px",
+            height: "8px",
+            background: "#0078d4",
+            border: "1px solid #106ebe",
+            transform: "translate(-50%, -50%) rotate(45deg)",
+          }}
+        />
+        {/* Delta label */}
+        <span
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: `${pct}%`,
+            transform: "translate(8px, -50%)",
+            fontSize: "10px",
+            color: "#888",
+            whiteSpace: "nowrap",
+            fontWeight: 500,
+          }}
+        >
+          {deltaLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-        {/* Main execution bar */}
-        <div style={barStyle}>
-          {barWidth > 4 && (
+function TestpassBar({
+  run,
+  toPct,
+  executionSystem,
+  isCurrent,
+}: {
+  run: TestpassDto;
+  toPct: (ms: number) => number;
+  executionSystem: string;
+  isCurrent: boolean;
+}) {
+  if (!run.startTime) return null;
+
+  const rStart = new Date(run.startTime).getTime();
+  const rEnd = run.endTime ? new Date(run.endTime).getTime() : Date.now();
+  const left = toPct(rStart);
+  const right = toPct(rEnd);
+  const width = Math.max(right - left, 0.4);
+  const durationMs = rEnd - rStart;
+  const barColor = getBarColor(executionSystem, run.result, run.status);
+  const isRunning = barColor === "running";
+
+  const label = isCurrent ? run.name : `${run.name}`;
+  const displayLabel = truncate(label, 100);
+
+  return (
+    <div style={rowStyle} title={`${run.name} — ${formatDurationLabel(durationMs)}`}>
+      <div
+        style={{
+          ...labelCellStyle,
+          fontWeight: isCurrent ? 600 : 400,
+          color: isCurrent ? "#333" : "#777",
+        }}
+        title={run.name}
+      >
+        {run.isRerun && (
+          <span style={{ marginRight: "4px", fontSize: "11px", color: "#999" }}>↻</span>
+        )}
+        {displayLabel}
+      </div>
+      <div style={trackCellStyle}>
+        <div
+          style={{
+            position: "absolute",
+            top: "3px",
+            bottom: "3px",
+            borderRadius: "2px",
+            minWidth: "3px",
+            left: `${left}%`,
+            width: `${width}%`,
+            background: isRunning
+              ? "repeating-linear-gradient(-45deg, #0078d4, #0078d4 4px, #5ba0d6 4px, #5ba0d6 8px)"
+              : barColor,
+            opacity: isCurrent ? 0.9 : 0.6,
+            border: isCurrent ? "none" : `1px dashed ${barColor === "running" ? "#0078d4" : barColor}`,
+          }}
+        >
+          {width > 6 && (
             <span
               style={{
                 position: "absolute",
-                fontSize: "12px",
+                fontSize: "11px",
                 color: "white",
                 fontWeight: 600,
                 top: "50%",
@@ -327,181 +248,228 @@ export default function MiniGanttChart({
             </span>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* Non-primary run bars (border only, no fill) */}
-        {nonPrimaryRuns.map((run, i) => {
-          if (!run.startTime) return null;
-          const rStart = new Date(run.startTime).getTime();
-          const rEnd = run.endTime ? new Date(run.endTime).getTime() : Date.now();
-          const rLeft = toPct(rStart);
-          const rRight = toPct(rEnd);
-          const rWidth = Math.max(rRight - rLeft, 0.3);
-          const rDuration = rEnd - rStart;
-          const rColor = getRerunBorderColor(run.result);
+// --- Main Component ---
 
-          // Calculate overlap with the main execution bar
-          const overlapLeft = Math.max(rLeft, barLeft);
-          const overlapRight = Math.min(rLeft + rWidth, barLeft + barWidth);
-          const hasOverlap = overlapRight > overlapLeft;
+export default function MiniGanttChart({
+  testpass,
+  buildRegistrationDate,
+}: MiniGanttChartProps) {
+  if (!testpass.startTime) {
+    return (
+      <div
+        style={{
+          ...containerStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "80px",
+        }}
+      >
+        <span style={{ fontStyle: "italic", color: "#999", fontSize: "13px" }}>
+          No timing data available
+        </span>
+      </div>
+    );
+  }
 
-          // Clip path to exclude the overlap region (in local coordinates of the rerun bar)
-          let clipPath: string | undefined;
-          if (hasOverlap && rWidth > 0) {
-            const localOverlapStart = ((overlapLeft - rLeft) / rWidth) * 100;
-            const localOverlapEnd = ((overlapRight - rLeft) / rWidth) * 100;
-            // Polygon that covers everything except the overlap interior
-            // (border still rendered via the white overlay)
-            clipPath = `polygon(0% 0%, ${localOverlapStart}% 0%, ${localOverlapStart}% 100%, 0% 100%, 0% 0%, 100% 0%, 100% 100%, ${localOverlapEnd}% 100%, ${localOverlapEnd}% 0%, 100% 0%)`;
-          }
+  const buildStart = buildRegistrationDate
+    ? new Date(buildRegistrationDate).getTime()
+    : new Date(testpass.startTime).getTime();
 
-          return (
-            <React.Fragment key={`run-${i}`}>
-              {/* Colored dashed border for non-overlapping area */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  height: "100%",
-                  borderRadius: "2px",
-                  minWidth: "3px",
-                  left: `${rLeft}%`,
-                  width: `${rWidth}%`,
-                  background: "transparent",
-                  border: `2px dashed ${rColor}`,
-                  boxSizing: "border-box",
-                  opacity: 0.7,
-                  clipPath,
-                }}
-              />
-              {/* White dashed border for the overlapping area */}
-              {hasOverlap && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    height: "100%",
-                    borderRadius: "2px",
-                    minWidth: "3px",
-                    left: `${rLeft}%`,
-                    width: `${rWidth}%`,
-                    background: "transparent",
-                    border: "2px dashed rgba(255, 255, 255, 0.85)",
-                    boxSizing: "border-box",
-                    clipPath: (() => {
-                      const localOverlapStart = ((overlapLeft - rLeft) / rWidth) * 100;
-                      const localOverlapEnd = ((overlapRight - rLeft) / rWidth) * 100;
-                      return `inset(0% ${100 - localOverlapEnd}% 0% ${localOverlapStart}%)`;
-                    })(),
-                  }}
-                />
-              )}
-              {/* Duration label */}
-              {rWidth > 5 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    fontSize: "11px",
-                    color: rColor,
-                    fontWeight: 600,
-                    top: "50%",
-                    left: `${rLeft + rWidth / 2}%`,
-                    transform: "translate(-50%, -50%)",
-                    whiteSpace: "nowrap",
-                    pointerEvents: "none",
-                    zIndex: 1,
-                  }}
-                >
-                  {formatDurationLabel(rDuration)}
-                </span>
-              )}
-            </React.Fragment>
-          );
-        })}
+  const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();
+
+  // Find the full extent of the timeline
+  let latestEnd = tpEnd;
+  if (testpass.runs) {
+    for (const run of testpass.runs) {
+      if (run.endTime) {
+        latestEnd = Math.max(latestEnd, new Date(run.endTime).getTime());
+      }
+    }
+  }
+
+  const rawSpan = latestEnd - buildStart;
+  const totalSpanMs = rawSpan > 0 ? rawSpan * 1.05 : 60000;
+
+  const toPct = (timeMs: number) =>
+    Math.max(0, Math.min(100, ((timeMs - buildStart) / totalSpanMs) * 100));
+
+  // --- Chunk data ---
+  const chunks = (testpass.dependentChunks ?? [])
+    .map((chunk) => {
+      const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
+      if (deltaMs == null) return null;
+      return {
+        chunkName: chunk.chunkName,
+        pct: toPct(buildStart + deltaMs),
+        deltaLabel: formatDeltaShort(deltaMs),
+      };
+    })
+    .filter(Boolean) as { chunkName: string; pct: number; deltaLabel: string }[];
+
+  // Sort chunks by availability time
+  chunks.sort((a, b) => a.pct - b.pct);
+
+  // --- Runs (current first, then reruns) ---
+  const allRuns: { run: TestpassDto; isCurrent: boolean }[] = [];
+  if (testpass.runs && testpass.runs.length > 0) {
+    // Current run first, then non-current
+    const currentRuns = testpass.runs.filter((r) => r.isCurrentRun);
+    const otherRuns = testpass.runs.filter((r) => !r.isCurrentRun);
+    for (const r of currentRuns) allRuns.push({ run: r, isCurrent: true });
+    for (const r of otherRuns) allRuns.push({ run: r, isCurrent: false });
+  } else {
+    // No runs array — use the testpass itself as the sole run
+    allRuns.push({ run: testpass, isCurrent: true });
+  }
+
+  // --- Time axis ticks ---
+  const tickCount = 6;
+  const ticks: { pct: number; label: string }[] = [];
+  for (let i = 0; i <= tickCount; i++) {
+    const pct = (i / tickCount) * 100;
+    const seconds = (totalSpanMs * (i / tickCount)) / 1000;
+    ticks.push({ pct, label: formatTickTime(seconds) });
+  }
+
+  const hasChunks = chunks.length > 0;
+
+  return (
+    <div style={containerStyle}>
+      {/* Header */}
+      <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>
+        Timeline from Build Start
       </div>
 
-      {/* Dependency marker labels row */}
-      {markers.length > 0 && (
+      {/* Column headers */}
+      <div
+        style={{
+          display: "flex",
+          height: "18px",
+          alignItems: "center",
+          borderBottom: "2px solid #e0e0e0",
+          marginBottom: "1px",
+        }}
+      >
         <div
           style={{
-            position: "relative",
-            marginTop: "2px",
-            height: `${markerLabelsHeight}px`,
-            overflow: "visible",
+            width: `${LABEL_WIDTH}px`,
+            minWidth: `${LABEL_WIDTH}px`,
+            fontSize: "10px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            color: "#888",
+            letterSpacing: "0.5px",
           }}
-        >
-          {markerRows.map(({ marker, row }, i) => (
-            <React.Fragment key={i}>
-              {row > 0 && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `${marker.pct}%`,
-                    top: 0,
-                    width: "1px",
-                    height: `${row * 16}px`,
-                    background: "#0078d4",
-                    opacity: 0.3,
-                    transform: "translateX(-50%)",
-                  }}
-                />
-              )}
-              <span
-                style={{
-                  position: "absolute",
-                  left: `${marker.pct}%`,
-                  top: `${row * 16}px`,
-                  fontSize: "11px",
-                  color: "#666",
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                  transform: getLabelAlignment(marker.pct).transform,
-                  lineHeight: "1.2",
-                }}
-                title={marker.fullName}
-              >
-                {marker.label} {marker.deltaLabel}
-              </span>
-            </React.Fragment>
-          ))}
+        />
+        <div style={{ flex: 1, position: "relative", height: "100%" }}>
+          {/* Build start line label */}
+          <span
+            style={{
+              position: "absolute",
+              left: 0,
+              bottom: 0,
+              fontSize: "9px",
+              fontWeight: 600,
+              color: "#004578",
+              textTransform: "uppercase",
+              letterSpacing: "0.3px",
+            }}
+          >
+            Build Start
+          </span>
         </div>
+      </div>
+
+      {/* Chunk rows — section header */}
+      {hasChunks && (
+        <>
+          <div
+            style={{
+              fontSize: "10px",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              color: "#0078d4",
+              letterSpacing: "0.5px",
+              padding: "4px 0 2px",
+            }}
+          >
+            Dependencies
+          </div>
+          {chunks.map((c, i) => (
+            <ChunkRow key={i} chunkName={c.chunkName} pct={c.pct} deltaLabel={c.deltaLabel} />
+          ))}
+          {/* Divider between chunks and runs */}
+          <div style={{ height: "1px", background: "#dedede", margin: "2px 0" }} />
+        </>
       )}
 
+      {/* Testpass run rows — section header */}
+      <div
+        style={{
+          fontSize: "10px",
+          fontWeight: 600,
+          textTransform: "uppercase",
+          color: "#0078d4",
+          letterSpacing: "0.5px",
+          padding: "4px 0 2px",
+        }}
+      >
+        Execution
+      </div>
+      {allRuns.map(({ run, isCurrent }, i) => (
+        <TestpassBar
+          key={i}
+          run={run}
+          toPct={toPct}
+          executionSystem={testpass.executionSystem}
+          isCurrent={isCurrent}
+        />
+      ))}
+
       {/* Time axis */}
-      <div style={axisStyle}>
-        {ticks.map((tick, i) => {
-          const isFirst = i === 0;
-          const isLast = i === tickCount;
-          const tickTransform = isFirst
-            ? "translateX(0)"
-            : isLast
-              ? "translateX(-100%)"
-              : "translateX(-50%)";
-          return (
-            <span
-              key={i}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: `${tick.pct}%`,
-                fontSize: "11px",
-                color: "#999",
-                transform: tickTransform,
-              }}
-            >
+      <div
+        style={{
+          display: "flex",
+          height: "18px",
+          marginTop: "4px",
+          borderTop: "1px solid #dedede",
+        }}
+      >
+        <div style={{ width: `${LABEL_WIDTH}px`, minWidth: `${LABEL_WIDTH}px` }} />
+        <div style={{ flex: 1, position: "relative" }}>
+          {ticks.map((tick, i) => {
+            const isFirst = i === 0;
+            const isLast = i === tickCount;
+            const tickTransform = isFirst
+              ? "translateX(0)"
+              : isLast
+                ? "translateX(-100%)"
+                : "translateX(-50%)";
+            return (
               <span
+                key={i}
                 style={{
                   position: "absolute",
-                  top: "-4px",
-                  left: "50%",
-                  width: "1px",
-                  height: "4px",
-                  background: "#c8c8c8",
+                  top: "2px",
+                  left: `${tick.pct}%`,
+                  fontSize: "10px",
+                  color: "#999",
+                  transform: tickTransform,
+                  whiteSpace: "nowrap",
                 }}
-            />
-            {tick.label}
-          </span>
-          );
-        })}
+              >
+                {tick.label}
+              </span>
+            );
+          })}
+          {/* Build-start vertical line across all rows */}
+        </div>
       </div>
     </div>
   );

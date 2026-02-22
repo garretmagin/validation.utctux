@@ -131,6 +131,7 @@ export default function TestpassTable({
 }: TestpassTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const detailRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   useEffect(() => {
     if (!expandTestpass) return;
@@ -141,9 +142,24 @@ export default function TestpassTable({
       next.add(name);
       return next;
     });
+    // Double rAF to wait for the detail panel to render
     requestAnimationFrame(() => {
-      const el = rowRefs.current.get(name);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      requestAnimationFrame(() => {
+        const mainRow = rowRefs.current.get(name);
+        const detailRow = detailRowRefs.current.get(name);
+        if (mainRow && detailRow) {
+          const detailRect = detailRow.getBoundingClientRect();
+          const mainRect = mainRow.getBoundingClientRect();
+          const viewportHeight = window.innerHeight;
+          // If either the detail bottom is off-screen or the main row top is off-screen,
+          // scroll to put the main row at the top so the detail panel has maximum space
+          if (detailRect.bottom > viewportHeight || mainRect.top < 0) {
+            mainRow.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        } else if (mainRow) {
+          mainRow.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
     });
   }, [expandTestpass]);
 
@@ -291,7 +307,7 @@ export default function TestpassTable({
                 <td style={cellStyle}>{formatDuration(tp.duration) ?? "\u2014"}</td>
               </tr>
               {isExpanded && (
-                <tr>
+                <tr ref={(el) => { if (el) detailRowRefs.current.set(tp.name, el); else detailRowRefs.current.delete(tp.name); }}>
                   <td colSpan={COLUMN_COUNT} style={{ padding: 0 }}>
                     <TestpassDetailPanel
                       testpass={tp}

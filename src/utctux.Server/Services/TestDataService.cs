@@ -385,26 +385,50 @@ public class TestDataService
     }
 
     /// <summary>
-    /// Builds the unified <see cref="AggregatedTestpassResult.Runs"/> list for each testpass.
-    /// Results where <see cref="AggregatedTestpassResult.IsRerunsLikely"/> is true are processed
-    /// in parallel, each independently resolving UTCT-tracked reruns and Nova-only reruns.
+    /// Builds the unified <see cref="AggregatedTestpassResult.Runs"/> list for every testpass.
+    /// Rerun candidates are resolved in parallel via UTCT and Nova APIs; all remaining
+    /// testpasses get a single self-entry so the runs list is always populated.
     /// </summary>
     private async Task BuildRunsListAsync(
         List<AggregatedTestpassResult> results,
         UtctApiClient utctClient,
         IReadOnlyList<TestSession> cloudTestData)
     {
-        var tasks = results
+        var rerunCandidates = results
             .Where(r => r.IsRerunsLikely || r.IsNovaRerunLikely)
-            .Select(r => ProcessResultRerunsAsync(r, utctClient, cloudTestData))
             .ToList();
 
-        if (tasks.Count != 0)
+        if (rerunCandidates.Count != 0)
         {
-            _logger.LogInformation("Resolving rerun data for {Count} testpasses", tasks.Count);
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            _logger.LogInformation("Resolving rerun data for {Count} testpasses", rerunCandidates.Count);
+            await Task.WhenAll(
+                rerunCandidates.Select(r => ProcessResultRerunsAsync(r, utctClient, cloudTestData))
+            ).ConfigureAwait(false);
+        }
+
+        // Populate a self-entry for testpasses that had no rerun resolution.
+        foreach (var r in results.Where(r => r.Runs.Count == 0))
+        {
+            r.Runs =
+            [
+                CreateSelfRunEntry(r),
+            ];
         }
     }
+
+    /// <summary>
+    /// Creates a shallow copy of <paramref name="result"/> as a Run entry
+    /// representing the testpass itself (with <see cref="AggregatedTestpassResult.IsCurrentRun"/> set).
+    /// </summary>
+    private static AggregatedTestpassResult CreateSelfRunEntry(AggregatedTestpassResult result) => new()
+    {
+        TestpassSummary = result.TestpassSummary,
+        TestSession = result.TestSession,
+        NovaTestpass = result.NovaTestpass,
+        CurrentRerunReason = result.CurrentRerunReason,
+        CurrentRerunOwner = result.CurrentRerunOwner,
+        IsCurrentRun = true,
+    };
 
     /// <summary>
     /// Resolves all rerun data for a single result:
@@ -508,15 +532,7 @@ public class TestDataService
         }
 
         // Always include self in the runs list so all runs are visible
-        runs.Add(new AggregatedTestpassResult
-        {
-            TestpassSummary = result.TestpassSummary,
-            TestSession = result.TestSession,
-            NovaTestpass = result.NovaTestpass,
-            CurrentRerunReason = result.CurrentRerunReason,
-            CurrentRerunOwner = result.CurrentRerunOwner,
-            IsCurrentRun = true,
-        });
+        runs.Add(CreateSelfRunEntry(result));
 
         result.Runs = runs;
     }

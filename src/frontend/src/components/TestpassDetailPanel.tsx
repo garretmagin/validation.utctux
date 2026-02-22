@@ -16,15 +16,16 @@ const panelStyle: React.CSSProperties = {
 };
 
 const tableContainerStyle: React.CSSProperties = {
-  flex: "0 0 40%",
+  flex: "1 1 40%",
   minWidth: 0,
   display: "flex",
   flexDirection: "column",
   gap: "16px",
+  overflow: "hidden",
 };
 
 const ganttContainerStyle: React.CSSProperties = {
-  flex: "0 0 60%",
+  flex: "1 1 60%",
   minWidth: 0,
 };
 
@@ -42,7 +43,6 @@ const tdStyle: React.CSSProperties = {
   fontSize: "13px",
   padding: "4px 8px",
   borderBottom: "1px solid #eee",
-  whiteSpace: "nowrap",
 };
 
 function formatDelta(timeSpanStr: string | null): { text: string; color: string } {

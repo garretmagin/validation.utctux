@@ -1,7 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { Card } from "azure-devops-ui/Card";
 import type { TestpassDto } from "../types/testResults";
 import "./GanttChart.css";
+
+const DEFAULT_LABEL_WIDTH = 280;
+const MIN_LABEL_WIDTH = 120;
+const MAX_LABEL_WIDTH = 800;
 
 interface GanttChartProps {
   testpasses: TestpassDto[];
@@ -273,6 +277,34 @@ function GanttBar({
 }
 
 export default function GanttChart({ testpasses, timeRange, onBarClick, buildStartTime }: GanttChartProps) {
+  const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
+  const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragState.current = { startX: e.clientX, startWidth: labelWidth };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragState.current) return;
+      const delta = ev.clientX - dragState.current.startX;
+      const newWidth = Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, dragState.current.startWidth + delta));
+      setLabelWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      dragState.current = null;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [labelWidth]);
+
   const minTime = useMemo(() => new Date(timeRange.min ?? 0).getTime(), [timeRange.min]);
   const maxTime = useMemo(() => new Date(timeRange.max ?? 0).getTime(), [timeRange.max]);
   const totalSeconds = useMemo(
@@ -302,7 +334,7 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
       className="flex-grow"
       titleProps={{ text: "Execution Timeline", ariaLevel: 2 }}
     >
-      <div className="gantt-container" style={{ padding: "0 20px 20px" }}>
+      <div className="gantt-container" style={{ padding: "0 20px 20px", "--gantt-label-width": `${labelWidth}px` } as React.CSSProperties}>
         {/* Legend */}
         <div className="gantt-legend">
           <div className="gantt-legend-section">
@@ -375,7 +407,12 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
 
             return (
               <div className="gantt-row" key={`${tp.name}-${i}`}>
-                <div className="gantt-label" title={tp.name}>
+                <div
+                  className="gantt-label"
+                  title={tp.name}
+                  style={onBarClick ? { cursor: "pointer" } : undefined}
+                  onClick={() => onBarClick?.(tp.name)}
+                >
                   {tp.name}
                   {esClass && (
                     <span className={`gantt-es-badge ${esClass}`}>
@@ -383,6 +420,7 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
                     </span>
                   )}
                 </div>
+                <div className="gantt-divider" onMouseDown={onDividerMouseDown} />
                 <div className="gantt-track">
                   <GanttBar
                     tp={tp}

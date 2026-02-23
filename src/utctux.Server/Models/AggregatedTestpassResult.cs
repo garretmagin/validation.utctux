@@ -46,6 +46,18 @@ public class AggregatedTestpassResult
     public bool IsRerunsLikely => TestpassSummary?.IsRerun == true || TestpassSummary?.HasReruns == true;
 
     /// <summary>
+    /// Whether the UTCT and Nova GUIDs disagree, indicating that Nova returned
+    /// rerun data (new GUID) while UTCT still references the original schedule.
+    /// This is a definitive signal that a Nova-side rerun occurred outside UTCT tracking.
+    /// </summary>
+    public bool IsNovaGuidMismatch =>
+        TestpassSummary is not null &&
+        NovaTestpass is not null &&
+        TestpassSummary.TestpassGuid != Guid.Empty &&
+        NovaTestpass.TestPassGuid != Guid.Empty &&
+        TestpassSummary.TestpassGuid != NovaTestpass.TestPassGuid;
+
+    /// <summary>
     /// Whether this testpass likely has Nova-only reruns not tracked by UTCT.
     /// True when the testpass is T3C, has a Nova start time, has chunk availability data,
     /// and started 10+ minutes after the latest dependency became available.

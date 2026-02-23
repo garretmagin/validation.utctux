@@ -58,6 +58,69 @@ public class AggregatedTestpassResultTests
 
     #endregion
 
+    #region IsNovaGuidMismatch
+
+    [Fact]
+    public void IsNovaGuidMismatch_DifferentGuids_ReturnsTrue()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { TestpassGuid = Guid.NewGuid() },
+            NovaTestpass = new NovaTestpass { TestPassGuid = Guid.NewGuid() },
+        };
+
+        result.IsNovaGuidMismatch.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsNovaGuidMismatch_SameGuid_ReturnsFalse()
+    {
+        var guid = Guid.NewGuid();
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { TestpassGuid = guid },
+            NovaTestpass = new NovaTestpass { TestPassGuid = guid },
+        };
+
+        result.IsNovaGuidMismatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsNovaGuidMismatch_NoNova_ReturnsFalse()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { TestpassGuid = Guid.NewGuid() },
+        };
+
+        result.IsNovaGuidMismatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsNovaGuidMismatch_NoSummary_ReturnsFalse()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            NovaTestpass = new NovaTestpass { TestPassGuid = Guid.NewGuid() },
+        };
+
+        result.IsNovaGuidMismatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsNovaGuidMismatch_EmptyGuids_ReturnsFalse()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { TestpassGuid = Guid.Empty },
+            NovaTestpass = new NovaTestpass { TestPassGuid = Guid.NewGuid() },
+        };
+
+        result.IsNovaGuidMismatch.ShouldBeFalse();
+    }
+
+    #endregion
+
     #region IsNovaRerunLikely
 
     [Fact]

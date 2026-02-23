@@ -432,10 +432,10 @@ public class TestDataService
 
     /// <summary>
     /// Resolves all rerun data for a single result:
-    /// 1. If this is a rerun, queries the parent testpass and adds it + siblings as Run entries
-    /// 2. If this is an original with reruns, adds each rerun as a Run entry
-    /// 3. If <see cref="AggregatedTestpassResult.IsNovaRerunLikely"/> or
-    ///    <see cref="AggregatedTestpassResult.IsNovaGuidMismatch"/>, discovers Nova-only reruns
+    /// 1. If UTCT and Nova GUIDs differ, directly resolves original + rerun as separate entries
+    /// 2. If this is a UTCT-tracked rerun, queries the parent testpass and adds it + siblings
+    /// 3. If this is an original with reruns, adds each rerun as a Run entry
+    /// 4. If <see cref="AggregatedTestpassResult.IsNovaRerunLikely"/>, discovers Nova-only reruns
     /// </summary>
     private async Task ProcessResultRerunsAsync(
         AggregatedTestpassResult result,
@@ -444,24 +444,65 @@ public class TestDataService
     {
         var runs = new List<AggregatedTestpassResult>();
         var currentGuid = result.TestpassSummary!.TestpassGuid;
+
+        // Handle GUID mismatch first — this is a definitive rerun signal.
+        // The NovaTestpass has rerun data (new GUID) while UTCT has the original schedule.
+        if (result.IsNovaGuidMismatch)
+        {
+            _logger.LogInformation(
+                "GUID mismatch for testpass {Name}: UTCT={UtctGuid}, Nova={NovaGuid} — resolving original and rerun separately",
+                result.TestpassSummary?.TestpassName, currentGuid, result.NovaTestpass!.TestPassGuid);
+
+            // 1. Build original run entry: UTCT summary + query Nova for the original GUID's data
+            var originalRun = new AggregatedTestpassResult
+            {
+                TestpassSummary = result.TestpassSummary,
+            };
+
+            try
+            {
+                var summary = await _novaService.GetTestPassSummaryAsync(currentGuid).ConfigureAwait(false);
+                if (summary is not null)
+                {
+                    originalRun.NovaTestpass = new NovaTestpass
+                    {
+                        TestPassId = summary.Id,
+                        TestPassName = summary.Name,
+                        TestPassGuid = Guid.TryParse(summary.TestpassGuid, out var g) ? g : currentGuid,
+                        StartTime = summary.StartTime,
+                        EndTime = summary.EndTime,
+                        StatusName = summary.ExecutionStatus,
+                        PassRate = summary.PassRate,
+                        Comments = summary.Comments,
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Failed to query Nova for original run {Guid}: {Error}", currentGuid, ex.Message);
+            }
+
+            runs.Add(originalRun);
+
+            // 2. The name-matched Nova data is the rerun — add it as the current run
+            runs.Add(new AggregatedTestpassResult
+            {
+                NovaTestpass = result.NovaTestpass,
+                CurrentRerunReason = result.NovaTestpass?.Comments,
+                IsCurrentRun = true,
+            });
+
+            result.Runs = runs;
+            return;
+        }
+
+        // Normal rerun resolution for UTCT-tracked reruns
         var seenGuids = new HashSet<Guid> { currentGuid };
 
         // Also seed with the Nova GUID so Nova family relatives that match self are deduped
         if (result.NovaTestpass?.TestPassGuid is { } currentNovaGuid && currentNovaGuid != Guid.Empty)
         {
             seenGuids.Add(currentNovaGuid);
-        }
-
-        // When UTCT and Nova GUIDs differ, Nova returned data for a rerun while UTCT
-        // still references the original schedule. Remove the UTCT GUID from seen so
-        // the original can be rediscovered via the Nova Family API.
-        var guidMismatch = result.IsNovaGuidMismatch;
-        if (guidMismatch)
-        {
-            seenGuids.Remove(currentGuid);
-            _logger.LogInformation(
-                "GUID mismatch for testpass {Name}: UTCT={UtctGuid}, Nova={NovaGuid} — treating as Nova-side rerun",
-                result.TestpassSummary?.TestpassName, currentGuid, result.NovaTestpass!.TestPassGuid);
         }
 
         var parentRef = result.TestpassSummary?.ParentTestpass;
@@ -531,7 +572,7 @@ public class TestDataService
         }
 
         // Discover Nova-only reruns not tracked by UTCT
-        if (result.IsNovaRerunLikely || guidMismatch)
+        if (result.IsNovaRerunLikely)
         {
             var novaRuns = await EnrichWithNovaFamilyAsync(result).ConfigureAwait(false);
             foreach (var nr in novaRuns)
@@ -544,23 +585,8 @@ public class TestDataService
             }
         }
 
-        if (guidMismatch)
-        {
-            // GUID mismatch: the NovaTestpass is for the rerun, not the original.
-            // Create a separate current-run entry with only the Nova rerun data
-            // so the original (discovered via Family API above) stays distinct.
-            runs.Add(new AggregatedTestpassResult
-            {
-                NovaTestpass = result.NovaTestpass,
-                CurrentRerunReason = result.NovaTestpass?.Comments,
-                IsCurrentRun = true,
-            });
-        }
-        else
-        {
-            // Normal case: include self in the runs list
-            runs.Add(CreateSelfRunEntry(result));
-        }
+        // Always include self in the runs list
+        runs.Add(CreateSelfRunEntry(result));
 
         result.Runs = runs;
     }

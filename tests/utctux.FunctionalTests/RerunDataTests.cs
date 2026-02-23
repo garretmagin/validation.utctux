@@ -139,6 +139,62 @@ public class RerunDataTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task LoadTestResults_WPGPower_NovaGuidMismatch_HasTwoRuns()
+    {
+        // Arrange — a testpass where Nova reran outside UTCT tracking,
+        // causing a GUID mismatch between the UTCT original and Nova rerun.
+        const string fqbn = "29538.1000.main.260220-1423";
+        const string testpassName = "WPG RI Power [Enterprise-amd64-SP6-WPGPower-DES]";
+
+        var svc = CreateTestDataService();
+        var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
+
+        // Act
+        var (results, _) = await svc.LoadTestResultsAsync(fqbn, progress);
+
+        // Assert — find the specific testpass
+        var testpass = results.FirstOrDefault(r =>
+            r.TestpassSummary?.TestpassName == testpassName);
+
+        Assert.NotNull(testpass);
+        output.WriteLine($"Testpass: {testpass.TestpassSummary?.TestpassName}");
+        output.WriteLine($"UTCT GUID: {testpass.TestpassSummary?.TestpassGuid}");
+        output.WriteLine($"Nova GUID: {testpass.NovaTestpass?.TestPassGuid}");
+        output.WriteLine($"IsNovaGuidMismatch: {testpass.IsNovaGuidMismatch}");
+        output.WriteLine($"Runs count: {testpass.Runs.Count}");
+
+        foreach (var run in testpass.Runs)
+        {
+            var name = run.TestpassSummary?.TestpassName
+                ?? run.NovaTestpass?.TestPassName
+                ?? "Unknown";
+            var utctGuid = run.TestpassSummary?.TestpassGuid;
+            var novaGuid = run.NovaTestpass?.TestPassGuid;
+            output.WriteLine($"  Run: {name}");
+            output.WriteLine($"    UTCT GUID={utctGuid} | Nova GUID={novaGuid}");
+            output.WriteLine($"    IsCurrentRun={run.IsCurrentRun}");
+            output.WriteLine($"    Status={run.Status} | Result={run.Result}");
+            output.WriteLine($"    Start={run.NovaTestpass?.StartTime} | End={run.NovaTestpass?.EndTime}");
+        }
+
+        // The UTCT and Nova GUIDs should differ (Nova reran it)
+        Assert.True(testpass.IsNovaGuidMismatch);
+
+        // Should have exactly 2 runs: the original + the rerun
+        Assert.Equal(2, testpass.Runs.Count);
+
+        // Exactly one should be marked as current (the rerun)
+        Assert.Single(testpass.Runs, r => r.IsCurrentRun);
+
+        // All Nova GUIDs should be unique (no duplicates)
+        var novaGuids = testpass.Runs
+            .Select(r => r.NovaTestpass?.TestPassGuid ?? Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .ToList();
+        Assert.Equal(novaGuids.Count, novaGuids.Distinct().Count());
+    }
+
+    [Fact]
     public async Task InspectNovaRerunData_WPGPower_DumpsRerunInfo()
     {
         // Diagnostic test — no assertions, just outputs Nova rerun data for investigation.

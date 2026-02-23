@@ -50,7 +50,7 @@ function formatDurationLabel(ms: number): string {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
 }
@@ -177,11 +177,13 @@ function TestpassBar({
   toPct,
   executionSystem,
   isCurrent,
+  hasMultipleRuns,
 }: {
   run: TestpassDto;
   toPct: (ms: number) => number;
   executionSystem: string;
   isCurrent: boolean;
+  hasMultipleRuns: boolean;
 }) {
   if (!run.startTime) return null;
 
@@ -207,7 +209,7 @@ function TestpassBar({
         }}
         title={run.name}
       >
-        {run.isRerun && (
+        {hasMultipleRuns && isCurrent && (
           <span style={{ marginRight: "4px", fontSize: "11px", color: "#999" }}>↻</span>
         )}
         {displayLabel}
@@ -229,7 +231,7 @@ function TestpassBar({
             border: isCurrent ? "none" : `1px dashed ${barColor === "running" ? "#0078d4" : barColor}`,
           }}
         >
-          {width > 6 && (
+          {width > 3.5 && (
             <span
               style={{
                 position: "absolute",
@@ -436,6 +438,7 @@ export default function MiniGanttChart({
           toPct={toPct}
           executionSystem={testpass.executionSystem}
           isCurrent={isCurrent}
+          hasMultipleRuns={allRuns.length > 1}
         />
       ))}
 

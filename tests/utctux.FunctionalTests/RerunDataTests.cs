@@ -180,6 +180,12 @@ public class RerunDataTests(ITestOutputHelper output)
         // The UTCT and Nova GUIDs should differ (Nova reran it)
         Assert.True(testpass.IsNovaGuidMismatch);
 
+        // The testpass should be flagged as a rerun (IsNovaGuidMismatch triggers IsRerun)
+        var timing = new TestpassTimingData(testpass);
+        output.WriteLine($"TestpassTimingData.IsRerun: {timing.IsRerun}");
+        output.WriteLine($"IsNovaGuidMismatch: {testpass.IsNovaGuidMismatch}");
+        Assert.True(timing.IsRerun, "Expected IsRerun to be true on the testpass");
+
         // Should have exactly 2 runs: the original + the rerun
         Assert.Equal(2, testpass.Runs.Count);
 

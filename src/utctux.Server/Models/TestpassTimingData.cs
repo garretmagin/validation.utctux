@@ -58,7 +58,10 @@ public class TestpassTimingData
         DependentChunks = result.ChunkAvailability ?? [];
         CurrentRerunReason = result.CurrentRerunReason;
         CurrentRerunOwner = result.CurrentRerunOwner;
-        IsRerun = result.TestpassSummary?.IsRerun ?? false;
+        IsRerun = result.TestpassSummary?.IsRerun == true
+            || result.TestpassSummary?.HasReruns == true
+            || result.IsNovaGuidMismatch
+            || result.IsNovaRerunLikely;
         IsNovaOnly = !hasSummary;
         IsCurrentRun = result.IsCurrentRun;
         Runs = (result.Runs ?? []).Select(r => new TestpassTimingData(r)).ToList();

@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.EngSys.AuthES.Authorization;
 using Microsoft.EngSys.AuthES.Identity;
-using Microsoft.Extensions.Primitives;
 using Microsoft.Identity.ServiceEssentials;
 using Microsoft.IdentityModel.Tokens;
 using AuthorizationData = Microsoft.EngSys.AuthES.Authorization.AuthorizationData;
@@ -43,16 +42,6 @@ public sealed class AuthESMiseMiddleware : IMiddleware
         {
             var headers = context.Request.Headers
                 .ToDictionary(h => h.Key, h => h.Value);
-
-            // Fall back to auth cookie if no Authorization header present
-            if (!headers.ContainsKey("Authorization"))
-            {
-                string? cookie = context.Request.Cookies[_authHelper.AuthPolicy.AuthCookieName];
-                if (cookie is not null)
-                {
-                    headers["Authorization"] = new StringValues($"Bearer {cookie}");
-                }
-            }
 
             if (!headers.ContainsKey("Authorization"))
             {

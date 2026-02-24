@@ -21,7 +21,10 @@ builder.Services.AddSingleton<utctux.Server.Services.BackgroundJobManager>();
 builder.Services.AddAuthESAuthentication(builder.Configuration);
 builder.Services.AddAuthESAuthorization();
 builder.Services.AddSingleton<utctux.Server.Auth.AuthESMiseMiddleware>();
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("UsersOnly", policy => policy.RequireRole("Users"));
+});
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -100,6 +103,7 @@ api.MapPost("testresults/{*fqbn}", (string fqbn, bool? refresh, utctux.Server.Se
 
     return Results.Accepted(value: jobMgr.GetStatus(fqbn));
 })
+.RequireAuthorization("UsersOnly")
 .WithName("PostTestResults");
 
 app.MapDefaultEndpoints();

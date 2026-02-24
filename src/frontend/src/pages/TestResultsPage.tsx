@@ -103,6 +103,7 @@ export default function TestResultsPage() {
             <ZeroData
               primaryText="No build selected"
               secondaryText="Select a build from the dropdown above to view test results."
+              imagePath="/hero-icon.svg"
               imageAltText="No build selected"
               actionType={ZeroDataActionType.ctaButton}
               actionText=""

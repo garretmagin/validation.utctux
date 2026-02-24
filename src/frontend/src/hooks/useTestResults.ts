@@ -20,7 +20,8 @@ const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 export function useTestResults(
-  fqbn: string | undefined
+  fqbn: string | undefined,
+  authFetch: (url: string, init?: RequestInit) => Promise<Response>
 ): UseTestResultsReturn {
   const [status, setStatus] = useState<WorkflowStatus>("idle");
   const [progress, setProgress] = useState<ProgressMessage[]>([]);
@@ -76,7 +77,7 @@ export function useTestResults(
       try {
         // 1. Trigger data gathering
         const refreshParam = refreshCounter > 0 ? "?refresh=true" : "";
-        const postRes = await fetch(`/api/testresults/${encodedFqbn}${refreshParam}`, {
+        const postRes = await authFetch(`/api/testresults/${encodedFqbn}${refreshParam}`, {
           method: "POST",
           signal,
         });
@@ -88,7 +89,7 @@ export function useTestResults(
         setStatus("polling");
 
         const pollStatus = async (): Promise<boolean> => {
-          const statusRes = await fetch(
+          const statusRes = await authFetch(
             `/api/testresults/${encodedFqbn}/status`,
             { signal }
           );
@@ -105,7 +106,7 @@ export function useTestResults(
 
           if (jobStatus.status === "completed") {
             // 3. Fetch full results
-            const resultsRes = await fetch(
+            const resultsRes = await authFetch(
               `/api/testresults/${encodedFqbn}`,
               { signal }
             );
@@ -167,7 +168,7 @@ export function useTestResults(
     triggerAndPoll();
 
     return cleanup;
-  }, [fqbn, refreshCounter, cleanup]);
+  }, [fqbn, refreshCounter, cleanup, authFetch]);
 
   return { status, progress, results, error, isTimeout, refresh };
 }

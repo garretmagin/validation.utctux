@@ -7,6 +7,7 @@ import {
   MessageCardSeverity,
 } from "azure-devops-ui/MessageCard";
 import type { IListBoxItem } from "azure-devops-ui/ListBox";
+import { useAuthFetch } from "../auth/useAuthFetch";
 
 interface BuildInfo {
   fqbn: string;
@@ -39,6 +40,7 @@ export default function BuildSelector({
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [loadingBuilds, setLoadingBuilds] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const authFetch = useAuthFetch();
 
   const branchSelection = useMemo(() => new DropdownSelection(), []);
   const buildSelection = useMemo(() => new DropdownSelection(), []);
@@ -49,7 +51,7 @@ export default function BuildSelector({
       setLoadingBranches(true);
       setError(null);
       try {
-        const response = await fetch("/api/builds/branches");
+        const response = await authFetch("/api/builds/branches");
         if (!response.ok)
           throw new Error(`HTTP error! status: ${response.status}`);
         const data: string[] = await response.json();
@@ -63,7 +65,7 @@ export default function BuildSelector({
       }
     };
     fetchBranches();
-  }, []);
+  }, [authFetch]);
 
   // Auto-select branch from initialFqbn when branches are loaded
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function BuildSelector({
       setLoadingBuilds(true);
       setError(null);
       try {
-        const response = await fetch(
+        const response = await authFetch(
           `/api/builds/branch/${encodeURIComponent(selectedBranch)}?count=20`
         );
         if (!response.ok)
@@ -111,7 +113,7 @@ export default function BuildSelector({
       }
     };
     fetchBuilds();
-  }, [selectedBranch, initialFqbn, buildSelection]);
+  }, [selectedBranch, initialFqbn, buildSelection, authFetch]);
 
   const branchItems: IListBoxItem[] = useMemo(
     () => branches.map((b) => ({ id: b, text: b })),

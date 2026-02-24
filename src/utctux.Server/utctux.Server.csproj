@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="Common.DiscoverClient" Version="3.0.120" />
+    <PackageReference Include="Microsoft.EngSys.AuthES" Version="*" />
+    <PackageReference Include="Microsoft.EngSys.AuthES.Authorization" Version="*" />
     <PackageReference Include="Common.MsalAuth" Version="3.0.71" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.1.0" />

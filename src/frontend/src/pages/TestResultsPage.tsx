@@ -12,6 +12,7 @@ import ResultsFilters from "../components/ResultsFilters";
 import type { TestResultsFilters } from "../components/ResultsFilters";
 import type { TestpassDto } from "../types/testResults";
 import { useTestResults } from "../hooks/useTestResults";
+import { useAuthFetch } from "../auth/useAuthFetch";
 
 function matchesStatus(tp: TestpassDto, statusFilter: string): boolean {
   const s = tp.status?.toLowerCase() ?? "";
@@ -34,7 +35,8 @@ let expandCounter = 0;
 export default function TestResultsPage() {
   const { fqbn } = useParams<{ fqbn?: string }>();
   const navigate = useNavigate();
-  const { status, progress, results, error, isTimeout, refresh } = useTestResults(fqbn);
+  const authFetch = useAuthFetch();
+  const { status, progress, results, error, isTimeout, refresh } = useTestResults(fqbn, authFetch);
   const [filters, setFilters] = useState<TestResultsFilters>({
     executionSystem: null,
     requirement: "Required",

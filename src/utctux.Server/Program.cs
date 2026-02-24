@@ -17,6 +17,12 @@ builder.Services.AddSingleton<utctux.Server.Services.GitBranchService>();
 builder.Services.AddSingleton<utctux.Server.Services.TestDataService>();
 builder.Services.AddSingleton<utctux.Server.Services.BackgroundJobManager>();
 
+// AuthES authentication & authorization (MISE-based token validation)
+builder.Services.AddAuthESAuthentication(builder.Configuration);
+builder.Services.AddAuthESAuthorization();
+builder.Services.AddSingleton<utctux.Server.Auth.AuthESMiseMiddleware>();
+builder.Services.AddAuthorization();
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -25,13 +31,16 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
 
+app.UseMiddleware<utctux.Server.Auth.AuthESMiseMiddleware>();
+app.UseAuthorization();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 
-var api = app.MapGroup("/api");
+var api = app.MapGroup("/api").RequireAuthorization();
 
 api.MapGet("builds/branches", async (utctux.Server.Services.BuildListingService svc) =>
 {

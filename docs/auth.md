@@ -160,24 +160,79 @@ Defined in `Auth/AuthESMiseMiddleware.cs`. Implements `IMiddleware` and performs
 
 ### Endpoint Protection
 
-All `/api` endpoints require authentication. Additionally, mutating endpoints enforce role-based authorization:
+All `/api` endpoints require both authentication and the `Users` role (via the `"UsersOnly"` policy on the API group). Users must be explicitly assigned this role to access any API functionality.
 
 ```csharp
-var api = app.MapGroup("/api").RequireAuthorization();
+var api = app.MapGroup("/api").RequireAuthorization("UsersOnly");
 
-// GET endpoints: any authenticated Microsoft tenant user
+api.MapGet("me", ...);                    // Authorization check (used by frontend gate)
 api.MapGet("builds/branches", ...);
 api.MapGet("builds/branch/{branch}", ...);
 api.MapGet("testresults/{fqbn}/status", ...);
 api.MapGet("testresults/{*fqbn}", ...);
-
-// POST endpoints: requires "Users" role assignment
-api.MapPost("testresults/{*fqbn}", ...).RequireAuthorization("UsersOnly");
+api.MapPost("testresults/{*fqbn}", ...);
 ```
 
-The `"UsersOnly"` policy requires the `Users` role, which maps to app role `MSFT/Role:Users` in the Entra ID app registration. Users must be explicitly assigned this role to trigger data-gathering jobs.
+The `"UsersOnly"` policy requires the `Users` role, which maps to app role `MSFT/Role:Users` in the Entra ID app registration. Users without this role see an Access Denied page with a link to request the [TM-TestScheduling entitlement](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3).
 
 > **Security note:** The middleware only accepts Bearer tokens via the `Authorization` header. Cookie-based authentication is intentionally not supported to prevent CSRF attacks.
+
+### Access Control via TM-TestScheduling Entitlement
+
+Access to utctux is gated by the **TM-TestScheduling** CoreIdentity entitlement. Users join the entitlement at [https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3), which adds them to one of two CCG (CoreIdentity Compliance Groups) security groups in the Microsoft tenant.
+
+#### How it works
+
+1. User joins the TM-TestScheduling entitlement via CoreIdentity
+2. CoreIdentity adds the user to one of the two CCG security groups
+3. Both groups are assigned the `Users` app role on the `utctux-api` service principal
+4. When the user authenticates and requests a token for `api://utctux`, Entra ID includes `"Users"` in the token's `roles` claim
+5. The AuthES middleware validates the token and the `"UsersOnly"` authorization policy checks for the `Users` role
+6. If the role is missing, the frontend shows an Access Denied page with a link to request the entitlement
+
+#### App Role Definition
+
+The `Users` app role is defined on the `utctux-api` app registration:
+
+| Property | Value |
+|----------|-------|
+| Display Name | `Users` |
+| Value | `Users` |
+| Role ID | `170952b3-b0e8-4b6f-8eb5-915b63fd9b30` |
+| Allowed Member Types | User |
+
+#### Assigned Security Groups
+
+| Group Alias | Object ID | Source |
+|-------------|-----------|--------|
+| `CCG-tmtestschedu-0wu3-User-zq4j-1` | `0ef390f8-afc0-475f-b28b-ed6ba278f8a6` | TM-TestScheduling entitlement |
+| `CCG-tmtestschedu-0wu3-User-irb1-1` | `9e1a3740-dddf-4635-a387-e8a41543ed98` | TM-TestScheduling entitlement |
+
+> **Why two groups?** CoreIdentity entitlements split membership across multiple CCG groups to handle membership limits. Both groups must be assigned the app role so that all entitlement members get access regardless of which group they land in.
+
+#### Managing role assignments
+
+To view current assignments:
+```bash
+az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/ec654f8c-71f6-4b22-b87e-960494cabc82/appRoleAssignedTo" \
+  --query "value[].{principal:principalDisplayName,type:principalType,role:appRoleId}" \
+  -o table
+```
+
+To assign the role to a new group:
+```bash
+az rest --method POST \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/ec654f8c-71f6-4b22-b87e-960494cabc82/appRoleAssignedTo" \
+  --headers "Content-Type=application/json" \
+  --body "{
+    \"principalId\": \"<group-object-id>\",
+    \"resourceId\": \"ec654f8c-71f6-4b22-b87e-960494cabc82\",
+    \"appRoleId\": \"170952b3-b0e8-4b6f-8eb5-915b63fd9b30\"
+  }"
+```
+
+> **Note:** This follows the same pattern as UTCT3's bicep deployment (`AADResources.bicep`), where the `User` app role is assigned to the TM-TestScheduling CCG groups via `Microsoft.Graph/appRoleAssignedTo@beta` resources.
 
 ### Configuration
 
@@ -242,14 +297,16 @@ The `AuthProvider` component (`src/auth/AuthProvider.tsx`) handles MSAL initiali
 5. **Set active account** — From the redirect response or the first cached account
 6. **Render children** — Only after initialization completes; shows "Loading…" during init
 
-### Auto-Redirect (AuthGate)
+### Auto-Redirect & Authorization Gate (AuthGate)
 
-The `AuthGate` component enforces authentication with no login button:
+The `AuthGate` component enforces both authentication and authorization:
 
 1. Waits for MSAL `inProgress` to be `"none"` (no pending operations)
 2. If not authenticated → calls `instance.loginRedirect({ scopes: apiScopes })`
-3. If authenticated → renders the app
-4. Shows "Signing in…" while redirecting
+3. If authenticated → calls `/api/me` to verify the user has the required role
+4. If the server returns `403 Forbidden` → renders `AccessDeniedPage` with a link to request the entitlement
+5. If authorized → renders the app
+6. Shows "Signing in…" while checking
 
 Users are automatically redirected to the Microsoft Entra ID login page on first visit. After sign-in, the browser redirects back to the app with an authorization code that MSAL exchanges for tokens.
 
@@ -410,6 +467,8 @@ az ad app update --id a7cb231c-7e92-4e78-8800-5241154741f2 \
 | Health check shows Unhealthy/Unauthorized | Middleware blocking `/health` endpoint | Middleware skips non-`/api` paths — verify `StartsWithSegments("/api")` check |
 | `Missing roles or security groups configuration` | Empty Roles and SecurityGroups in config | At least one role or security group entry must be defined |
 | 401 on API calls | Token expired or wrong audience | Check browser DevTools → Network → Authorization header; verify audience in appsettings matches `api://utctux` |
+| 403 / Access Denied page shown | User is authenticated but lacks the `Users` role | User must join the [TM-TestScheduling entitlement](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3); or verify the CCG group is assigned the app role |
+| `No authenticationScheme was specified` | `AddAuthentication()` not called or no default scheme | Ensure `PassThroughAuthHandler` is registered as the default scheme via `AddAuthentication("AuthES").AddScheme(...)` |
 | Silent token acquisition fails | Session expired | MSAL falls back to `acquireTokenRedirect()` automatically |
 | `ServiceManagementReference field is required` | Microsoft tenant policy | Include `serviceManagementReference` in `az rest` body when creating app registrations |
 
@@ -419,9 +478,11 @@ az ad app update --id a7cb231c-7e92-4e78-8800-5241154741f2 \
 |------|---------|
 | `src/utctux.Server/Auth/AuthESExtensions.cs` | `AddAuthESAuthentication` / `AddAuthESAuthorization` for ASP.NET Core |
 | `src/utctux.Server/Auth/AuthESMiseMiddleware.cs` | ASP.NET Core middleware for MISE token validation |
+| `src/utctux.Server/Auth/PassThroughAuthHandler.cs` | No-op auth handler bridging MISE middleware with ASP.NET Core authorization (Forbid/Challenge) |
 | `src/utctux.Server/Program.cs` | Wires up auth services, middleware, and endpoint protection |
 | `src/utctux.Server/appsettings.json` | Authorization config (audiences, roles, security groups) |
 | `src/frontend/src/auth/msalConfig.ts` | MSAL configuration (client IDs, tenant, scopes) |
-| `src/frontend/src/auth/AuthProvider.tsx` | MSAL initialization + auto-redirect auth gate |
+| `src/frontend/src/auth/AuthProvider.tsx` | MSAL initialization + auto-redirect + authorization gate |
 | `src/frontend/src/auth/useAuthFetch.ts` | Fetch wrapper with automatic Bearer token |
+| `src/frontend/src/components/AccessDeniedPage.tsx` | Access denied UI with entitlement request link |
 | `nuget.config` | NuGet feed for AuthES packages |

@@ -21,6 +21,10 @@ builder.Services.AddSingleton<utctux.Server.Services.BackgroundJobManager>();
 builder.Services.AddAuthESAuthentication(builder.Configuration);
 builder.Services.AddAuthESAuthorization();
 builder.Services.AddSingleton<utctux.Server.Auth.AuthESMiseMiddleware>();
+builder.Services.AddAuthentication(utctux.Server.Auth.PassThroughAuthHandler.SchemeName)
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
+        utctux.Server.Auth.PassThroughAuthHandler>(
+        utctux.Server.Auth.PassThroughAuthHandler.SchemeName, null);
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("UsersOnly", policy => policy.RequireRole("Users"));
@@ -43,7 +47,7 @@ if (app.Environment.IsDevelopment())
 }
 
 
-var api = app.MapGroup("/api").RequireAuthorization();
+var api = app.MapGroup("/api").RequireAuthorization("UsersOnly");
 
 api.MapGet("builds/branches", async (utctux.Server.Services.BuildListingService svc) =>
 {
@@ -103,8 +107,10 @@ api.MapPost("testresults/{*fqbn}", (string fqbn, bool? refresh, utctux.Server.Se
 
     return Results.Accepted(value: jobMgr.GetStatus(fqbn));
 })
-.RequireAuthorization("UsersOnly")
 .WithName("PostTestResults");
+
+api.MapGet("me", (HttpContext ctx) => Results.Ok(new { name = ctx.User.Identity?.Name }))
+.WithName("GetMe");
 
 app.MapDefaultEndpoints();
 

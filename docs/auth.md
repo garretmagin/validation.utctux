@@ -421,7 +421,7 @@ Currently, the user's identity is **not** propagated to downstream services (no 
 
 ### Outbound Auth — Production (Federated Managed Identity)
 
-In production (Azure Container Apps), `AuthService` uses `ClientAssertionCredential` with a user-assigned managed identity to authenticate as the **UTCT app registration** (`654d70d7-a63f-408d-81fe-6aeedb717be9`). This mirrors the pattern used by UTCT3's `CloudAuthContextHelper`.
+In production (Azure Container Apps), `AuthService` uses `ClientAssertionCredential` with a user-assigned managed identity to authenticate as the **UTCT app registration** (`ee1431e4-dee7-4963-81f3-52c9b1ec4ca0`). This mirrors the pattern used by UTCT3's `CloudAuthContextHelper`.
 
 > **Note:** This is a temporary arrangement. utctux will move to its own dedicated identity once a new app registration is created and partner teams (CloudTest, Nova, Discover) grant it access.
 
@@ -438,14 +438,14 @@ In production (Azure Container Apps), `AuthService` uses `ClientAssertionCredent
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `UseInteractiveAuth` | `false` | `true` for local dev (opens browser), `false` for production |
-| `ServiceClientId` | `654d70d7-...` | The Entra app registration to authenticate as |
+| `ServiceClientId` | `ee1431e4-...` | The Entra app registration to authenticate as |
 | `ManagedIdentityClientId` | *(none)* | Client ID of the user-assigned MI. **Required** in production. Set via `UtctAuth__ManagedIdentityClientId` env var. |
 | `UtctApiEnvironment` | `Production` | UTCT API environment to target |
 
 **Infrastructure prerequisites:**
 
 1. **User-assigned managed identity** — Must exist in the `utctux` resource group and be assigned to the Container App
-2. **Federated identity credential** — Must be configured on the UTCT app registration (`654d70d7`), trusting the MI's principal ID with audience `api://AzureADTokenExchange`
+2. **Federated identity credential** — Must be configured on the UTCT app registration (`ee1431e4`), trusting the MI's principal ID with audience `api://AzureADTokenExchange`
 3. **Environment variable** — `UtctAuth__ManagedIdentityClientId` must be set on the Container App to the MI's client ID
 
 **Downstream API scopes** (all accessed using the UTCT identity):

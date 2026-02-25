@@ -18,7 +18,7 @@ public class UtctAuthOptions
     /// The Entra ID application (client) ID used for outbound service-to-service auth.
     /// Defaults to the UTCT app registration.
     /// </summary>
-    public string ServiceClientId { get; set; } = "654d70d7-a63f-408d-81fe-6aeedb717be9";
+    public string ServiceClientId { get; set; } = "ee1431e4-dee7-4963-81f3-52c9b1ec4ca0";
 
     /// <summary>
     /// The client ID of the user-assigned managed identity used for federated credential auth.

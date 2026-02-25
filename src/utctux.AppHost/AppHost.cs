@@ -9,6 +9,11 @@ var server = builder.AddProject<Projects.utctux_Server>("server")
     .WithExternalHttpEndpoints()
     .WithReference(insights);
 
+if (builder.ExecutionContext.IsPublishMode)
+{
+    server.WithEnvironment("UtctAuth__ManagedIdentityClientId", "9268f9cd-e580-474c-baf8-aceec524ee2b");
+}
+
 var webfrontend = builder.AddViteApp("webfrontend", "../frontend")
     .WithEndpoint("http", e => e.Port = 5173)
     .WithReference(server)

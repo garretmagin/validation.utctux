@@ -1,3 +1,5 @@
+using Aspire.Hosting.Azure;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddAzureContainerAppEnvironment("utctux-env");
@@ -11,7 +13,11 @@ var server = builder.AddProject<Projects.utctux_Server>("server")
 
 if (builder.ExecutionContext.IsPublishMode)
 {
-    server.WithEnvironment("UtctAuth__ManagedIdentityClientId", "9268f9cd-e580-474c-baf8-aceec524ee2b");
+    var identity = builder.AddAzureUserAssignedIdentity("id-utctux")
+        .PublishAsExisting("id-utctux", "utctux");
+
+    server.WithAzureUserAssignedIdentity(identity)
+        .WithEnvironment("UtctAuth__ManagedIdentityClientId", identity.Resource.ClientId);
 }
 
 var webfrontend = builder.AddViteApp("webfrontend", "../frontend")

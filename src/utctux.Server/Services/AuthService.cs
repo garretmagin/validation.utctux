@@ -188,7 +188,7 @@ public class AuthService
         var options = new InteractiveBrowserCredentialOptions
         {
             TenantId = AzureTenant.Microsoft,
-            ClientId = _options.ServiceClientId,
+            ClientId = _options.InteractiveClientId,
             TokenCachePersistenceOptions = new TokenCachePersistenceOptions
             {
                 Name = "utctux-dev-cache",

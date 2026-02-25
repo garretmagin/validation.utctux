@@ -415,9 +415,53 @@ The inbound auth system described here is **independent** of the existing `AuthS
 | Concern | System | Purpose |
 |---------|--------|---------|
 | **Inbound** (this doc) | AuthES/MISE + MSAL.js | Validate that the *caller* has a valid Entra token |
-| **Outbound** | `AuthService` (MSAL `InteractiveBrowserCredential`) | Acquire tokens to call CloudTest, Nova, UTCT, Discover |
+| **Outbound** | `AuthService` (federated MI credential / interactive browser) | Acquire tokens to call CloudTest, Nova, UTCT, Discover |
 
 Currently, the user's identity is **not** propagated to downstream services (no on-behalf-of flow). The server authenticates to downstream services using its own identity. OBO may be added in the future when accessing ADO for content.
+
+### Outbound Auth — Production (Federated Managed Identity)
+
+In production (Azure Container Apps), `AuthService` uses `ClientAssertionCredential` with a user-assigned managed identity to authenticate as the **UTCT app registration** (`654d70d7-a63f-408d-81fe-6aeedb717be9`). This mirrors the pattern used by UTCT3's `CloudAuthContextHelper`.
+
+> **Note:** This is a temporary arrangement. utctux will move to its own dedicated identity once a new app registration is created and partner teams (CloudTest, Nova, Discover) grant it access.
+
+**How it works:**
+
+1. A user-assigned managed identity (MI) is attached to the Container App
+2. A federated identity credential on the UTCT app registration trusts the MI
+3. `ManagedIdentityClientAssertion` (from `Microsoft.Identity.Web.Certificateless`) uses the MI to sign a JWT assertion
+4. `ClientAssertionCredential` presents the signed assertion to Entra ID to get tokens as the UTCT app
+5. No client secrets are stored — this is secretless authentication
+
+**Configuration (`UtctAuth` section in `appsettings.json`):**
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `UseInteractiveAuth` | `false` | `true` for local dev (opens browser), `false` for production |
+| `ServiceClientId` | `654d70d7-...` | The Entra app registration to authenticate as |
+| `ManagedIdentityClientId` | *(none)* | Client ID of the user-assigned MI. **Required** in production. Set via `UtctAuth__ManagedIdentityClientId` env var. |
+| `UtctApiEnvironment` | `Production` | UTCT API environment to target |
+
+**Infrastructure prerequisites:**
+
+1. **User-assigned managed identity** — Must exist in the `utctux` resource group and be assigned to the Container App
+2. **Federated identity credential** — Must be configured on the UTCT app registration (`654d70d7`), trusting the MI's principal ID with audience `api://AzureADTokenExchange`
+3. **Environment variable** — `UtctAuth__ManagedIdentityClientId` must be set on the Container App to the MI's client ID
+
+**Downstream API scopes** (all accessed using the UTCT identity):
+
+| API | Scope |
+|-----|-------|
+| CloudTest | `77c466d9-b133-4a83-a8f5-c94133051e06/.default` |
+| Nova | `https://mspmecloud.onmicrosoft.com/Es-novaapi/.default` |
+| GitBranch | `https://mspmecloud.onmicrosoft.com/os-branch-api/.default` |
+| Azure DevOps | `499b84ac-1321-427f-aa17-267ca6975798/.default` |
+| UTCT | Per-environment scope from `UtctApiClient.GetApiConnectionInfo()` |
+| Discover | ADO scope via `DiscoverClientSettings.TargetingPmeTenant()` |
+
+### Outbound Auth — Local Development (Interactive Browser)
+
+When `UseInteractiveAuth = true` (set in `appsettings.Development.json`), `AuthService` uses `InteractiveBrowserCredential` with the same UTCT client ID. On first run it opens a browser for login and caches the `AuthenticationRecord` at `%APPDATA%/utctux-auth-record.json` for subsequent silent token redemption.
 
 ## Adding Role-Based or Security Group Authorization
 

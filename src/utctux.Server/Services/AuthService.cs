@@ -3,6 +3,7 @@ using Azure.Identity;
 using Common.DiscoverClient;
 using Common.MsalAuth;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Web;
 using Refit;
 using UtctClient;
 
@@ -14,8 +15,6 @@ namespace utctux.Server.Services;
 /// </summary>
 public class AuthService
 {
-    private static readonly Guid UtctClientId = new("654d70d7-a63f-408d-81fe-6aeedb717be9");
-
     public const string CloudTestScope = "77c466d9-b133-4a83-a8f5-c94133051e06/.default";
     public const string CloudTestEndpoint = "https://api.prod.cloudtest.microsoft.com";
 
@@ -34,17 +33,20 @@ public class AuthService
     private readonly ILogger<AuthService> _logger;
     private readonly UtctAuthOptions _options;
     private readonly Lazy<TokenCredential> _cachedCredential;
+    private readonly Lazy<TokenCredential> _serviceCredential;
 
     public AuthService(ILogger<AuthService> logger, IOptions<UtctAuthOptions> options)
     {
         _logger = logger;
         _options = options.Value;
         _cachedCredential = new Lazy<TokenCredential>(CreateUserTokenCredential);
+        _serviceCredential = new Lazy<TokenCredential>(CreateServiceTokenCredential);
     }
 
     /// <summary>
     /// Gets a <see cref="TokenCredential"/> for the current environment.
-    /// Uses interactive/cached MSAL tokens for local dev.
+    /// Uses interactive/cached MSAL tokens for local dev, or federated
+    /// managed identity credential for production.
     /// </summary>
     public TokenCredential GetTokenCredential()
     {
@@ -53,9 +55,7 @@ public class AuthService
             return _cachedCredential.Value;
         }
 
-        // TODO: Use managed identity or app registration for server/production scenarios.
-        _logger.LogWarning("Production auth not configured; falling back to interactive user auth");
-        return _cachedCredential.Value;
+        return _serviceCredential.Value;
     }
 
     /// <summary>
@@ -151,7 +151,30 @@ public class AuthService
         return new HttpClient(handler);
     }
 
-    private static TokenCredential CreateUserTokenCredential()
+    /// <summary>
+    /// Creates a <see cref="ClientAssertionCredential"/> using a user-assigned managed identity
+    /// for federated credential authentication. Mirrors UTCT3's CloudAuthContextHelper pattern.
+    /// </summary>
+    private TokenCredential CreateServiceTokenCredential()
+    {
+        if (string.IsNullOrEmpty(_options.ManagedIdentityClientId))
+        {
+            throw new InvalidOperationException(
+                "UtctAuth:ManagedIdentityClientId must be configured for production auth. " +
+                "Set the UtctAuth__ManagedIdentityClientId environment variable.");
+        }
+
+        _logger.LogInformation("Using federated managed identity credential (MI: {MiClientId}, App: {AppClientId})",
+            _options.ManagedIdentityClientId, _options.ServiceClientId);
+
+        var assertion = new ManagedIdentityClientAssertion(_options.ManagedIdentityClientId);
+        return new ClientAssertionCredential(
+            AzureTenant.Microsoft,
+            _options.ServiceClientId,
+            async (ct) => await assertion.GetSignedAssertionAsync(null));
+    }
+
+    private TokenCredential CreateUserTokenCredential()
     {
         // Load a previously-saved AuthenticationRecord so the credential can
         // silently redeem cached refresh tokens without opening a browser.
@@ -165,7 +188,7 @@ public class AuthService
         var options = new InteractiveBrowserCredentialOptions
         {
             TenantId = AzureTenant.Microsoft,
-            ClientId = UtctClientId.ToString("D"),
+            ClientId = _options.ServiceClientId,
             TokenCachePersistenceOptions = new TokenCachePersistenceOptions
             {
                 Name = "utctux-dev-cache",

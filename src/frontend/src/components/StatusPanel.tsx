@@ -77,7 +77,7 @@ export default function StatusPanel({
     <Card
       className="flex-grow margin-top-16"
       titleProps={{ text: "Data Gathering Progress" }}
-      contentProps={{ style: { display: "flex", flexDirection: "column" as const } }}
+      contentProps={{} as Record<string, unknown>}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px" }}>
         <div className="flex-row" style={{ alignItems: "center", gap: "8px" }}>

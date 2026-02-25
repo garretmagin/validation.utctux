@@ -3,7 +3,7 @@ import { LogLevel } from "@azure/msal-browser";
 
 const SPA_CLIENT_ID = "a557232a-261f-4ede-a01a-7b2b18b3c534";
 const TENANT_ID = "72f988bf-86f1-41af-91ab-2d7cd011db47"; // Microsoft tenant
-const API_CLIENT_ID = "a7cb231c-7e92-4e78-8800-5241154741f2";
+export const API_CLIENT_ID = "a7cb231c-7e92-4e78-8800-5241154741f2";
 
 export const msalConfig: Configuration = {
   auth: {

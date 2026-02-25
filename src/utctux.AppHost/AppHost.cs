@@ -1,5 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+builder.AddAzureContainerAppEnvironment("utctux-env");
+
 var server = builder.AddProject<Projects.utctux_Server>("server")
     .WithHttpHealthCheck("/health")
     .WithExternalHttpEndpoints();

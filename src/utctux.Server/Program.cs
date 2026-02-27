@@ -103,12 +103,23 @@ api.MapGet("testresults/{*fqbn}", (string fqbn, utctux.Server.Services.TestResul
 })
 .WithName("GetTestResults");
 
-api.MapPost("testresults/{*fqbn}", (string fqbn, bool? refresh, utctux.Server.Services.BackgroundJobManager jobMgr, utctux.Server.Services.TestResultsCache cache) =>
+api.MapPost("testresults/{*fqbn}", (string fqbn, bool? refresh, HttpRequest request, utctux.Server.Services.BackgroundJobManager jobMgr, utctux.Server.Services.TestResultsCache cache) =>
 {
-    if (refresh == true)
+    var forceRefresh = refresh == true;
+
+    // If the client sent If-Modified-Since (e.g. page hard-reload), bypass cache entries older than that timestamp
+    if (!forceRefresh
+        && request.GetTypedHeaders().IfModifiedSince is { } ifModifiedSince
+        && cache.Get(fqbn) is { } existing
+        && existing.CachedAt < ifModifiedSince)
+    {
+        forceRefresh = true;
+    }
+
+    if (forceRefresh)
         cache.Remove(fqbn);
 
-    if (!jobMgr.TryStartJob(fqbn, forceRefresh: refresh == true))
+    if (!jobMgr.TryStartJob(fqbn, forceRefresh: forceRefresh))
         return Results.Conflict(jobMgr.GetStatus(fqbn));
 
     return Results.Accepted(value: jobMgr.GetStatus(fqbn));

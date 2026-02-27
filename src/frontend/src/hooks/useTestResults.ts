@@ -5,6 +5,16 @@ import type {
   TestResultsResponse,
 } from "../types/testResults";
 
+// Detect hard-reload (Ctrl+F5 / F5) — if the page was reloaded,
+// record the timestamp so the server can bypass stale cached data.
+const pageLoadedAt: string | undefined = (() => {
+  const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  if (nav?.type === "reload") {
+    return new Date().toUTCString();
+  }
+  return undefined;
+})();
+
 type WorkflowStatus = "idle" | "loading" | "polling" | "completed" | "error";
 
 interface UseTestResultsReturn {
@@ -77,9 +87,14 @@ export function useTestResults(
       try {
         // 1. Trigger data gathering
         const refreshParam = refreshCounter > 0 ? "?refresh=true" : "";
+        const headers: Record<string, string> = {};
+        if (pageLoadedAt) {
+          headers["If-Modified-Since"] = pageLoadedAt;
+        }
         const postRes = await authFetch(`/api/testresults/${encodedFqbn}${refreshParam}`, {
           method: "POST",
           signal,
+          headers,
         });
         if (!postRes.ok && postRes.status !== 409) {
           throw new Error(`Failed to trigger data gathering (${postRes.status})`);

@@ -1,2 +1,37 @@
 /* App styles are provided by azure-devops-ui Formula Design System */
 
+.experiment-badge {
+  position: relative;
+  font-weight: 700;
+  color: #d13438;
+  cursor: default;
+  user-select: none;
+}
+
+.experiment-tooltip {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  padding-top: 8px;
+  width: 340px;
+  z-index: 1000;
+  white-space: normal;
+}
+
+.experiment-tooltip-content {
+  padding: 16px;
+  background: #fff !important;
+  border: 1px solid #ddd !important;
+  border-left: 1px solid #ddd !important;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  color: #323130 !important;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.experiment-badge:hover .experiment-tooltip {
+  display: block;
+}

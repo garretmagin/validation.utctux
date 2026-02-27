@@ -99,3 +99,7 @@ NuGet feeds: nuget.org + Microsoft `validation.ctproto` (see `nuget.config`).
 | CloudTest | `77c466d9.../.default` | Refit |
 | Nova | `mspmecloud.onmicrosoft.com/Es-novaapi/.default` | Refit |
 | Discover | ADO scope | `DiscoverClient` SDK |
+
+## Agent Workflow
+
+- **Do not commit changes.** Stage files and present a summary, but let the user review and commit manually.

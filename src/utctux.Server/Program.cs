@@ -39,6 +39,12 @@ var app = builder.Build();
 app.UseExceptionHandler();
 
 app.UseMiddleware<utctux.Server.Auth.AuthESMiseMiddleware>();
+
+// Serve static files before routing so the catch-all SPA fallback endpoint
+// doesn't prevent StaticFileMiddleware from serving wwwroot assets.
+app.UseFileServer();
+
+app.UseRouting();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
@@ -114,7 +120,26 @@ api.MapGet("me", (HttpContext ctx) => Results.Ok(new { name = ctx.User.Identity?
 
 app.MapDefaultEndpoints();
 
-app.UseFileServer();
+// SPA fallback: serve index.html for client-side routes so React Router
+// can handle them. Requests with recognized static-file extensions (e.g.
+// .js, .css, .svg) that weren't already served by UseFileServer() get a
+// proper 404 instead of index.html. FQBNs like "29541.1000.main.260225-1649"
+// contain dots but have no recognized extension, so they correctly receive
+// the SPA shell.
+var contentTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+app.MapFallback("{*path}", async (HttpContext context) =>
+{
+    var path = context.Request.Path.Value ?? "";
+    if (contentTypeProvider.TryGetContentType(path, out _))
+    {
+        context.Response.StatusCode = 404;
+        return;
+    }
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(
+        app.Environment.WebRootFileProvider.GetFileInfo("index.html"));
+});
 
 app.Run();
 

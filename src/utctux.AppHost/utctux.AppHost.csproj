@@ -5,6 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);ASPIREACADOMAINS001</NoWarn>
     <UserSecretsId>05af63ce-1b5a-4d70-8c18-f6e57d572599</UserSecretsId>
   </PropertyGroup>
 

@@ -6,10 +6,17 @@ builder.AddAzureContainerAppEnvironment("utctux-env");
 
 var insights = builder.AddAzureApplicationInsights("appinsights");
 
+var customDomain = builder.AddParameter("customDomain");
+var certificateName = builder.AddParameter("certificateName");
+
 var server = builder.AddProject<Projects.utctux_Server>("server")
     .WithHttpHealthCheck("/health")
     .WithExternalHttpEndpoints()
-    .WithReference(insights);
+    .WithReference(insights)
+    .PublishAsAzureContainerApp((infra, app) =>
+    {
+        app.ConfigureCustomDomain(customDomain, certificateName);
+    });
 
 if (builder.ExecutionContext.IsPublishMode)
 {

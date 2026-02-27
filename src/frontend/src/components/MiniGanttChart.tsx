@@ -288,7 +288,7 @@ export default function MiniGanttChart({
   const buildStart = buildRegistrationDate
     ? new Date(buildRegistrationDate).getTime()
     : hasStartTime
-      ? new Date(testpass.startTime).getTime()
+      ? new Date(testpass.startTime!).getTime()
       : Date.now();
 
   const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();

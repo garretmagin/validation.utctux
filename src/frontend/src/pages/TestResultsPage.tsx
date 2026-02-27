@@ -81,19 +81,7 @@ export default function TestResultsPage() {
       <Header
         title="Test Results"
         titleSize={TitleSize.Large}
-        commandBarItems={
-          fqbn
-            ? [
-                {
-                  id: "refresh",
-                  text: "Refresh",
-                  iconProps: { iconName: "Refresh" },
-                  onActivate: refresh,
-                  important: true,
-                },
-              ]
-            : []
-        }
+        commandBarItems={[]}
       />
       <div className="page-content flex-grow flex-column padding-16">
         <BuildSelector initialFqbn={fqbn} onFqbnSelected={onFqbnSelected} />

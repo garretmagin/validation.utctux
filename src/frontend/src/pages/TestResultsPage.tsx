@@ -135,12 +135,12 @@ export default function TestResultsPage() {
                 testpasses={filteredTestpasses}
                 timeRange={results.timeRange}
                 onBarClick={onGanttBarClick}
-                buildStartTime={results.buildInfo.registrationDate}
+                buildStartTime={results.buildInfo.buildStartTime}
               />
             </div>
 
             <Card className="flex-grow margin-top-16">
-              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.registrationDate} expandTestpass={expandTestpass} />
+              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.buildStartTime} expandTestpass={expandTestpass} />
             </Card>
           </>
         )}

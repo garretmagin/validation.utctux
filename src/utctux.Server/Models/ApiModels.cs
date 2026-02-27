@@ -8,7 +8,7 @@ public record BuildInfo
     public string? Fqbn { get; init; }
     public string? Branch { get; init; }
     public int? BuildId { get; init; }
-    public DateTimeOffset? RegistrationDate { get; init; }
+    public DateTimeOffset? BuildStartTime { get; init; }
     public string? Status { get; init; }
 }
 

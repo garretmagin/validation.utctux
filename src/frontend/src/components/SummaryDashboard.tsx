@@ -154,16 +154,16 @@ export default function SummaryDashboard({
 
   const timingLabel = useMemo(() => {
     if (!timeRange.min || !timeRange.max) return null;
-    const startOffset = formatTOffset(buildInfo.registrationDate, timeRange.min);
-    const endOffset = formatTOffset(buildInfo.registrationDate, timeRange.max);
+    const startOffset = formatTOffset(buildInfo.buildStartTime, timeRange.min);
+    const endOffset = formatTOffset(buildInfo.buildStartTime, timeRange.max);
     return `${startOffset} → ${endOffset} (${formatDuration(wallClockSeconds)})`;
-  }, [buildInfo.registrationDate, timeRange, wallClockSeconds]);
+  }, [buildInfo.buildStartTime, timeRange, wallClockSeconds]);
 
   const buildStartFormatted = useMemo(() => {
-    const d = new Date(buildInfo.registrationDate);
-    if (isNaN(d.getTime())) return buildInfo.registrationDate;
+    const d = new Date(buildInfo.buildStartTime);
+    if (isNaN(d.getTime())) return buildInfo.buildStartTime;
     return d.toLocaleString();
-  }, [buildInfo.registrationDate]);
+  }, [buildInfo.buildStartTime]);
 
   return (
     <div

@@ -12,17 +12,21 @@ using DiscoverBuildVersion = Common.DiscoverClient.WindowsBuildVersion;
 namespace utctux.FunctionalTests;
 
 /// <summary>
-/// Diagnostic test to investigate the time delta between the timestamp embedded
-/// in the FQBN (e.g., 260226-1659 → 16:59) and the "Build Start" time shown
-/// in the UI (which comes from Discover's ServerCreated field).
+/// Diagnostic tests to investigate the time delta between the timestamp embedded
+/// in the FQBN (e.g., 260226-1659 → 16:59 PT) and the build start time computed
+/// from Discover document revision timestamps.
 /// </summary>
 public class BuildTimingTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// The FQBN whose timestamp (260226-1659 → Feb 26 2026, 16:59) differs from
-    /// the Discover ServerCreated / "Build Start" shown in the UI (5:52:55 PM).
+    /// Standard build FQBN (no BXLO restart). Build start should come from definition revision.
     /// </summary>
-    private const string Fqbn = "29542.1000.main.260226-1659";
+    private const string StandardFqbn = "29542.1000.main.260226-1659";
+
+    /// <summary>
+    /// BXLO restart FQBN. Build start should come from buildingBranchRevision attribute.
+    /// </summary>
+    private const string BxloRestartFqbn = "GE_CURRENT_DIRECTES_COREBUILD.26572.1002.20260225-2201";
 
     private (AuthService Auth, ILoggerFactory LoggerFactory) CreateAuthService()
     {
@@ -62,137 +66,161 @@ public class BuildTimingTests(ITestOutputHelper output)
             loggerFactory.CreateLogger<TestDataService>());
     }
 
-    /// <summary>
-    /// Parses the FQBN timestamp part (e.g., "260226-1659") into a DateTime.
-    /// Format is YYMMDD-HHMM.
-    /// </summary>
-    private static DateTime? ParseFqbnTimestamp(string timestamp)
+    [Fact]
+    public void ParseRevisionTimestamp_ParsesCorrectly()
     {
-        // Expected format: YYMMDD-HHMM (e.g., "260226-1659")
-        if (DateTime.TryParseExact(timestamp, "yyMMdd-HHmm",
-            CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-        {
-            return parsed;
-        }
+        // Standard revision format
+        var result = TestDataService.ParseRevisionTimestamp("260226-1659");
+        Assert.NotNull(result);
 
-        return null;
+        output.WriteLine($"Parsed '260226-1659': {result}");
+        output.WriteLine($"  UTC: {result.Value.UtcDateTime}");
+        output.WriteLine($"  Offset: {result.Value.Offset}");
+
+        // Should be Feb 26, 2026 16:59 Pacific
+        Assert.Equal(2026, result.Value.Year);
+        Assert.Equal(2, result.Value.Month);
+        Assert.Equal(26, result.Value.Day);
+        Assert.Equal(16, result.Value.Hour);
+        Assert.Equal(59, result.Value.Minute);
+
+        // Null/empty returns null
+        Assert.Null(TestDataService.ParseRevisionTimestamp(null));
+        Assert.Null(TestDataService.ParseRevisionTimestamp(""));
+        Assert.Null(TestDataService.ParseRevisionTimestamp("invalid"));
     }
 
     [Fact]
-    public async Task InvestigateFqbnVsDiscoverTimeDelta()
+    public async Task StandardBuild_UsesDefinitionRevision()
     {
-        // --- Step 1: Parse the FQBN timestamp ---
-        var parsedFqbn = Server.Models.WindowsBuildVersion.FromAnySupportedFormat(Fqbn);
-        Assert.NotNull(parsedFqbn);
-
-        output.WriteLine("=== FQBN Analysis ===");
-        output.WriteLine($"Full FQBN: {Fqbn}");
-        output.WriteLine($"Parsed Branch: {parsedFqbn.Branch}");
-        output.WriteLine($"Parsed Version: {parsedFqbn.Version}");
-        output.WriteLine($"Parsed Qfe: {parsedFqbn.Qfe}");
-        output.WriteLine($"Parsed Timestamp (raw): {parsedFqbn.Timestamp}");
-
-        var fqbnTime = ParseFqbnTimestamp(parsedFqbn.Timestamp);
-        output.WriteLine($"Parsed Timestamp (DateTime): {fqbnTime}");
-        output.WriteLine($"Parsed Timestamp (formatted): {fqbnTime?.ToString("yyyy-MM-dd HH:mm")}");
-
-        // --- Step 2: Query Discover for the build ---
-        var (authService, loggerFactory) = CreateAuthService();
+        var (authService, _) = CreateAuthService();
         var discoverClient = authService.GetDiscoverClient();
-        var discoverBuildVersion = DiscoverBuildVersion.FromAnySupportedFormat(Fqbn);
+        var buildVersion = DiscoverBuildVersion.FromAnySupportedFormat(StandardFqbn);
 
         var search = new OfficialSearchParameterFactory()
-            .SetWindowsBuildVersion(discoverBuildVersion)
+            .SetWindowsBuildVersion(buildVersion)
             .SetOfficiality(true);
 
         var builds = await discoverClient.SearchBuildsAsync(search);
         var build = builds.FirstOrDefault();
-
         Assert.NotNull(build);
 
-        output.WriteLine("\n=== Discover Build Data ===");
+        var attrs = build.Document.Properties.Attributes;
+        var definition = build.Document.Properties.Definition;
+
+        output.WriteLine("=== Standard Build: Discover Document ===");
+        output.WriteLine($"FQBN: {StandardFqbn}");
         output.WriteLine($"ServerCreated: {build.ServerCreated}");
-        output.WriteLine($"ServerCreated (Local): {build.ServerCreated.ToLocalTime()}");
-        output.WriteLine($"ServerCreated (UTC): {build.ServerCreated.ToUniversalTime()}");
+        output.WriteLine($"Definition.Revision: {definition.Revision}");
+        output.WriteLine($"Definition.Created: {definition.Created}");
 
-        // Dump all available date fields from the build document
-        if (build.Document?.Properties is { } props)
-        {
-            output.WriteLine($"\n=== Build Document Properties ===");
+        // Dump all attribute keys to see what's available
+        output.WriteLine("\n=== All Attribute Keys ===");
+        foreach (var key in attrs.Keys.OrderBy(k => k))
+            output.WriteLine($"  {key} = {attrs[key]}");
 
-            if (props.Attributes is { } attrs)
-            {
-                output.WriteLine($"AzureDevOpsBuildId: {attrs.AzureDevOpsBuildId}");
-                output.WriteLine($"AzureDevOpsProjectGuid: {attrs.AzureDevOpsProjectGuid}");
-                output.WriteLine($"AzureDevOpsOrganization: {attrs.AzureDevOpsOrganization}");
-            }
-        }
+        // Should NOT have buildingBranchRevision (standard build)
+        var hasBxloRev = attrs.TryGetValue("buildingBranchRevision", out var bxloRevValue);
+        output.WriteLine($"\nHas buildingBranchRevision: {hasBxloRev} (value: {bxloRevValue})");
 
-        // --- Step 3: Load via TestDataService to get buildRegistrationDate ---
-        output.WriteLine("\n=== TestDataService LoadTestResultsAsync ===");
+        // Parse the revision timestamp
+        var buildStart = TestDataService.ParseRevisionTimestamp(definition.Revision);
+        Assert.NotNull(buildStart);
+
+        output.WriteLine($"\n=== Computed Build Start ===");
+        output.WriteLine($"From Definition.Revision '{definition.Revision}': {buildStart}");
+        output.WriteLine($"ServerCreated (for comparison): {build.ServerCreated}");
+        output.WriteLine($"Delta (ServerCreated - BuildStart): {build.ServerCreated - buildStart.Value.UtcDateTime}");
+    }
+
+    [Fact]
+    public async Task BxloRestartBuild_UsesBuildingBranchRevision()
+    {
+        var (authService, _) = CreateAuthService();
+        var discoverClient = authService.GetDiscoverClient();
+        var buildVersion = DiscoverBuildVersion.FromAnySupportedFormat(BxloRestartFqbn);
+
+        var search = new OfficialSearchParameterFactory()
+            .SetWindowsBuildVersion(buildVersion)
+            .SetOfficiality(true);
+
+        var builds = await discoverClient.SearchBuildsAsync(search);
+        var build = builds.FirstOrDefault();
+        Assert.NotNull(build);
+
+        var attrs = build.Document.Properties.Attributes;
+        var definition = build.Document.Properties.Definition;
+
+        output.WriteLine("=== BXLO Restart Build: Discover Document ===");
+        output.WriteLine($"FQBN: {BxloRestartFqbn}");
+        output.WriteLine($"ServerCreated: {build.ServerCreated}");
+        output.WriteLine($"Definition.Revision: {definition.Revision}");
+        output.WriteLine($"Definition.Created: {definition.Created}");
+
+        // Dump all attribute keys
+        output.WriteLine("\n=== All Attribute Keys ===");
+        foreach (var key in attrs.Keys.OrderBy(k => k))
+            output.WriteLine($"  {key} = {attrs[key]}");
+
+        // Should HAVE buildingBranchRevision
+        var hasBxloRev = attrs.TryGetValue("buildingBranchRevision", out var bxloRevValue);
+        output.WriteLine($"\nHas buildingBranchRevision: {hasBxloRev}");
+        output.WriteLine($"buildingBranchRevision value: {bxloRevValue}");
+
+        Assert.True(hasBxloRev, "BXLO restart build should have buildingBranchRevision attribute");
+
+        var bxloRevStr = bxloRevValue?.ToString();
+        Assert.False(string.IsNullOrWhiteSpace(bxloRevStr));
+
+        // Parse both timestamps
+        var buildStartFromBxlo = TestDataService.ParseRevisionTimestamp(bxloRevStr);
+        var buildStartFromRevision = TestDataService.ParseRevisionTimestamp(definition.Revision);
+
+        output.WriteLine($"\n=== Computed Build Start ===");
+        output.WriteLine($"From buildingBranchRevision '{bxloRevStr}': {buildStartFromBxlo}");
+        output.WriteLine($"From Definition.Revision '{definition.Revision}': {buildStartFromRevision}");
+        output.WriteLine($"ServerCreated (for comparison): {build.ServerCreated}");
+
+        Assert.NotNull(buildStartFromBxlo);
+        Assert.NotNull(buildStartFromRevision);
+
+        // BXLO revision should be earlier than the restart's own revision
+        output.WriteLine($"Delta (Revision - BxloRev): {buildStartFromRevision.Value - buildStartFromBxlo.Value}");
+    }
+
+    [Fact]
+    public async Task FullPipeline_StandardBuild_ReturnsCorrectStartTime()
+    {
+        output.WriteLine("=== Full Pipeline Test: Standard Build ===");
+
         var svc = CreateTestDataService();
         var progress = new Progress<string>(msg => output.WriteLine($"  [Progress] {msg}"));
 
-        var (results, buildRegistrationDate) = await svc.LoadTestResultsAsync(
-            Fqbn, progress, loadChunkData: false);
+        var (results, buildStartTime) = await svc.LoadTestResultsAsync(
+            StandardFqbn, progress, loadChunkData: false);
 
-        output.WriteLine($"\nBuild Registration Date: {buildRegistrationDate}");
-        output.WriteLine($"Build Registration Date (Local): {buildRegistrationDate?.ToLocalTime()}");
-        output.WriteLine($"Build Registration Date (UTC): {buildRegistrationDate?.ToUniversalTime()}");
+        Assert.NotNull(buildStartTime);
+        output.WriteLine($"\nBuild Start Time: {buildStartTime}");
+        output.WriteLine($"Build Start Time (Local): {buildStartTime.Value.ToLocalTime()}");
         output.WriteLine($"Total testpasses: {results.Count}");
 
-        // --- Step 4: Calculate and display the delta ---
-        output.WriteLine("\n=== Time Delta Analysis ===");
-        if (fqbnTime.HasValue && buildRegistrationDate.HasValue)
-        {
-            // Compare assuming FQBN timestamp is UTC
-            var fqbnAsUtc = new DateTimeOffset(fqbnTime.Value, TimeSpan.Zero);
-            var regDateUtc = buildRegistrationDate.Value.ToUniversalTime();
-            var deltaUtc = regDateUtc - fqbnAsUtc;
+        // The build start should be derived from the FQBN timestamp (260226-1659 → 4:59 PM PT)
+        var expectedFqbnTime = TestDataService.ParseRevisionTimestamp("260226-1659");
+        Assert.NotNull(expectedFqbnTime);
 
-            output.WriteLine($"FQBN timestamp (as UTC): {fqbnAsUtc:yyyy-MM-dd HH:mm}");
-            output.WriteLine($"Discover ServerCreated (UTC): {regDateUtc:yyyy-MM-dd HH:mm:ss}");
-            output.WriteLine($"Delta (ServerCreated - FQBN, assuming FQBN=UTC): {deltaUtc}");
+        output.WriteLine($"\nExpected (from FQBN): {expectedFqbnTime}");
+        output.WriteLine($"Actual: {buildStartTime}");
+        Assert.Equal(expectedFqbnTime.Value, buildStartTime.Value);
 
-            // Compare assuming FQBN timestamp is Pacific Time
-            var pacificTz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-            var fqbnAsPacific = new DateTimeOffset(fqbnTime.Value, pacificTz.GetUtcOffset(fqbnTime.Value));
-            var deltaPacific = regDateUtc - fqbnAsPacific.ToUniversalTime();
-
-            output.WriteLine($"\nFQBN timestamp (as Pacific): {fqbnAsPacific:yyyy-MM-dd HH:mm zzz}");
-            output.WriteLine($"Delta (ServerCreated - FQBN, assuming FQBN=Pacific): {deltaPacific}");
-
-            output.WriteLine($"\n--- Interpretation ---");
-            output.WriteLine($"The FQBN timestamp '{parsedFqbn.Timestamp}' represents the time the build was");
-            output.WriteLine($"defined/queued by the ADO pipeline. The Discover 'ServerCreated' ({buildRegistrationDate})");
-            output.WriteLine($"represents when Discover indexed/registered the build after it completed.");
-            output.WriteLine($"The delta shows how long between build queue and Discover registration.");
-        }
-        else
-        {
-            output.WriteLine("⚠ Could not calculate delta — one or both timestamps are null.");
-        }
-
-        // --- Step 5: Look at a few testpass timings for additional context ---
-        output.WriteLine("\n=== Sample Testpass Start Times ===");
-        var sampleResults = results.Take(10);
-        foreach (var r in sampleResults)
+        // Show sample testpass timing offsets relative to new build start
+        output.WriteLine("\n=== Sample Testpass Offsets (from build start) ===");
+        foreach (var r in results.Take(5))
         {
             var timing = new TestpassTimingData(r);
-            output.WriteLine($"  {r.TestpassSummary?.TestpassName ?? "(unknown)"}");
-            output.WriteLine($"    ExecSystem: {r.TestpassSummary?.ExecutionSystem}");
-            output.WriteLine($"    TimingData.StartTime: {timing.StartTime}");
-            output.WriteLine($"    TimingData.EndTime: {timing.EndTime}");
-            if (r.TestSession?.SessionTimelineData is { } timeline)
+            if (timing.StartTime.HasValue)
             {
-                output.WriteLine($"    CT QueuedTime: {timeline.QueuedTime}");
-                output.WriteLine($"    CT ExecutionStartTime: {timeline.ExecutionStartTime}");
-                output.WriteLine($"    CT CompletedTime: {timeline.CompletedTime}");
-            }
-            if (r.NovaTestpass is { } nova)
-            {
-                output.WriteLine($"    Nova StartTime: {nova.StartTime}");
-                output.WriteLine($"    Nova EndTime: {nova.EndTime}");
+                var offset = timing.StartTime.Value - buildStartTime.Value;
+                output.WriteLine($"  {r.TestpassSummary?.TestpassName}: T+{offset.TotalHours:F1}h");
             }
         }
     }

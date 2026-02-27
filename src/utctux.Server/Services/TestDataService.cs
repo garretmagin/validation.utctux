@@ -1,3 +1,4 @@
+using System.Globalization;
 using Common.DiscoverClient;
 using Common.DiscoverClient.SearchParameters;
 using utctux.Server.Models;
@@ -35,7 +36,7 @@ public class TestDataService
     /// <summary>
     /// Loads and aggregates test results from UTCT, CloudTest, and Nova for a given FQBN.
     /// </summary>
-    public virtual async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildRegistrationDate)> LoadTestResultsAsync(
+    public virtual async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildStartTime)> LoadTestResultsAsync(
         string fqbn,
         IProgress<string>? progress = null,
         bool loadChunkData = true,
@@ -45,7 +46,7 @@ public class TestDataService
         progress?.Report("Resolving build identity...");
         _logger.LogInformation("Resolving build identity for FQBN: {Fqbn}", fqbn);
 
-        var (organizationName, projectId, buildId, buildRegistrationDate) = await ResolveBuildIdentityAsync(fqbn, progress);
+        var (organizationName, projectId, buildId, buildStartTime) = await ResolveBuildIdentityAsync(fqbn, progress);
 
         if (organizationName is null || !projectId.HasValue || !buildId.HasValue)
         {
@@ -85,7 +86,7 @@ public class TestDataService
         if (loadChunkData && summaryList.Count > 0)
         {
             progress?.Report("Loading chunk availability...");
-            chunkLookup = await LoadChunkAvailabilityAsync(summaryList, buildRegistrationDate, progress);
+            chunkLookup = await LoadChunkAvailabilityAsync(summaryList, buildStartTime, progress);
         }
 
         // Phase 3: Aggregate results
@@ -97,10 +98,10 @@ public class TestDataService
         await BuildRunsListAsync(results, utctClient, cloudTestData);
 
         progress?.Report($"Loaded {results.Count} test results.");
-        return (results, buildRegistrationDate);
+        return (results, buildStartTime);
     }
 
-    private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? RegistrationDate)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)
+    private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? BuildStartTime)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)
     {
         try
         {
@@ -133,7 +134,34 @@ public class TestDataService
             // Parse the ADO org URI to extract org name
             var orgName = ExtractOrganizationName(adoOrg);
 
-            return (orgName, adoProjectGuid.Value, adoBuildId.Value, build.ServerCreated);
+            // Determine build start time from revision timestamps.
+            // For BXLO restarts, use buildingBranchRevision (original build's queue time).
+            // Otherwise, use the definition revision (this build's queue time).
+            // Fallback to ServerCreated if parsing fails.
+            DateTimeOffset? buildStartTime = null;
+            if (attrs.TryGetValue("buildingBranchRevision", out var bxloRevObj) &&
+                bxloRevObj is string bxloRev && !string.IsNullOrWhiteSpace(bxloRev))
+            {
+                buildStartTime = ParseRevisionTimestamp(bxloRev);
+                if (buildStartTime.HasValue)
+                    _logger.LogInformation("Build start from buildingBranchRevision '{Revision}': {StartTime}", bxloRev, buildStartTime);
+            }
+
+            if (!buildStartTime.HasValue)
+            {
+                var revision = build.Document.Properties.Definition?.Revision;
+                buildStartTime = ParseRevisionTimestamp(revision);
+                if (buildStartTime.HasValue)
+                    _logger.LogInformation("Build start from definition revision '{Revision}': {StartTime}", revision, buildStartTime);
+            }
+
+            if (!buildStartTime.HasValue)
+            {
+                buildStartTime = build.ServerCreated;
+                _logger.LogWarning("Could not parse revision timestamp for FQBN {Fqbn}, falling back to ServerCreated: {StartTime}", fqbn, buildStartTime);
+            }
+
+            return (orgName, adoProjectGuid.Value, adoBuildId.Value, buildStartTime);
         }
         catch (Exception ex)
         {
@@ -152,6 +180,24 @@ public class TestDataService
 
         // If it's not a URI, assume it's already the org name
         return adoOrgValue;
+    }
+
+    /// <summary>
+    /// Parses a build revision timestamp (YYMMDD-HHMM) into a DateTimeOffset in Pacific Time.
+    /// Returns null if the timestamp cannot be parsed.
+    /// </summary>
+    internal static DateTimeOffset? ParseRevisionTimestamp(string? revision)
+    {
+        if (string.IsNullOrWhiteSpace(revision))
+            return null;
+
+        if (!DateTime.TryParseExact(revision, "yyMMdd-HHmm",
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return null;
+
+        var pacific = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var offset = pacific.GetUtcOffset(parsed);
+        return new DateTimeOffset(parsed, offset);
     }
 
     private async Task<IReadOnlyList<UtctTestpass>> LoadUtctScheduleDataAsync(
@@ -277,7 +323,7 @@ public class TestDataService
 
     private async Task<Dictionary<string, ChunkAvailabilityInfo>> LoadChunkAvailabilityAsync(
         IReadOnlyList<UtctTestpass> summaryList,
-        DateTimeOffset? buildRegistrationDate,
+        DateTimeOffset? buildStartTime,
         IProgress<string>? progress = null)
     {
         var lookup = new Dictionary<string, ChunkAvailabilityInfo>();
@@ -329,8 +375,8 @@ public class TestDataService
                     ? new DateTimeOffset(result.Drop.Created.Value, TimeSpan.Zero)
                     : (DateTimeOffset?)null;
 
-                TimeSpan? delta = (availableTime.HasValue && buildRegistrationDate.HasValue)
-                    ? availableTime.Value - buildRegistrationDate.Value
+                TimeSpan? delta = (availableTime.HasValue && buildStartTime.HasValue)
+                    ? availableTime.Value - buildStartTime.Value
                     : null;
 
                 var key = $"{result.entry.BuildGuid}:{result.entry.Drop}:{result.entry.Flavor}";

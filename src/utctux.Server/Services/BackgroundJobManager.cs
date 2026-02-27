@@ -112,11 +112,11 @@ public class BackgroundJobManager
 
             _logger.LogInformation("Starting data gathering job for FQBN: {Fqbn}", fqbn);
 
-            var (aggregated, buildRegistrationDate) = await _testDataService.LoadTestResultsAsync(fqbn, progress);
+            var (aggregated, buildStartTime) = await _testDataService.LoadTestResultsAsync(fqbn, progress);
 
             // Convert AggregatedTestpassResult[] to TestResultsResponse via TestpassTimingData
             var timingData = aggregated.Select(r => new TestpassTimingData(r)).ToList();
-            var response = MapToTestResultsResponse(fqbn, timingData, buildRegistrationDate);
+            var response = MapToTestResultsResponse(fqbn, timingData, buildStartTime);
 
             _cache.Set(fqbn, new TestResultsCacheEntry { Results = response });
 
@@ -157,7 +157,7 @@ public class BackgroundJobManager
         }
     }
 
-    internal static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildRegistrationDate)
+    internal static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildStartTime)
     {
         int passed = 0, failed = 0, running = 0, unknown = 0;
         DateTimeOffset? earliest = null;
@@ -178,7 +178,7 @@ public class BackgroundJobManager
 
         return new TestResultsResponse
         {
-            BuildInfo = new BuildInfo { Fqbn = fqbn, RegistrationDate = buildRegistrationDate },
+            BuildInfo = new BuildInfo { Fqbn = fqbn, BuildStartTime = buildStartTime },
             Summary = new TestResultsSummary
             {
                 Total = timingData.Count,
@@ -190,7 +190,7 @@ public class BackgroundJobManager
             Testpasses = timingData.Select(MapTestpass).ToList(),
             TimeRange = new TimeRangeDto
             {
-                Min = buildRegistrationDate ?? earliest,
+                Min = buildStartTime ?? earliest,
                 Max = latest,
             },
         };

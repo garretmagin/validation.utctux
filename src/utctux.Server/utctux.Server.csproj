@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="utctux.UnitTests" />
+    <InternalsVisibleTo Include="utctux.FunctionalTests" />
   </ItemGroup>
 
   <ItemGroup>

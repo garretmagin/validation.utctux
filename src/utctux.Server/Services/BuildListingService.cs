@@ -1,3 +1,4 @@
+using System.Globalization;
 using Common.DiscoverClient;
 using Common.DiscoverClient.SearchParameters;
 using utctux.Server.Models;
@@ -39,12 +40,30 @@ public class BuildListingService(AuthService authService, GitBranchService gitBr
 
         return builds
             .OrderByDescending(b => b.ServerCreated)
-            .Select(b => new BuildInfo
+            .Select(b =>
             {
-                Fqbn = b.Document?.FriendlyName,
-                Branch = b.Document?.Properties?.Definition?.Branch,
-                BuildId = b.Document?.Properties?.Attributes?.AzureDevOpsBuildId,
-                RegistrationDate = b.ServerCreated,
+                // Determine build start time from revision timestamps
+                DateTimeOffset? buildStartTime = null;
+                var attrs = b.Document?.Properties?.Attributes;
+                if (attrs is not null &&
+                    attrs.TryGetValue("buildingBranchRevision", out var bxloRevObj) &&
+                    bxloRevObj is string bxloRev && !string.IsNullOrWhiteSpace(bxloRev))
+                {
+                    buildStartTime = TestDataService.ParseRevisionTimestamp(bxloRev);
+                }
+
+                buildStartTime ??= TestDataService.ParseRevisionTimestamp(
+                    b.Document?.Properties?.Definition?.Revision);
+
+                buildStartTime ??= b.ServerCreated;
+
+                return new BuildInfo
+                {
+                    Fqbn = b.Document?.FriendlyName,
+                    Branch = b.Document?.Properties?.Definition?.Branch,
+                    BuildId = b.Document?.Properties?.Attributes?.AzureDevOpsBuildId,
+                    BuildStartTime = buildStartTime,
+                };
             })
             .ToArray();
     }

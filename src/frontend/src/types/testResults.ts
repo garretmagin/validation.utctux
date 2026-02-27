@@ -14,7 +14,7 @@ export interface BuildInfo {
   fqbn: string;
   branch: string;
   buildId: number;
-  registrationDate: string;
+  buildStartTime: string;
   status: string;
 }
 

@@ -8,14 +8,6 @@ interface SummaryDashboardProps {
   timeRange: { min: string | null; max: string | null };
 }
 
-function parseDurationToSeconds(d: string | null): number {
-  if (!d) return 0;
-  const parts = d.split(":");
-  if (parts.length !== 3) return 0;
-  const [h, m, s] = parts.map(Number);
-  return (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
-}
-
 function formatDuration(totalSeconds: number): string {
   if (totalSeconds <= 0) return "0m";
   const h = Math.floor(totalSeconds / 3600);
@@ -48,13 +40,11 @@ interface CategoryStats {
   passed: number;
   failed: number;
   wallClockSeconds: number;
-  cpuSeconds: number;
 }
 
 function computeCategoryStats(testpasses: TestpassDto[]): CategoryStats {
   let minStart: number | null = null;
   let maxEnd: number | null = null;
-  let cpuSeconds = 0;
   let passed = 0;
   let failed = 0;
 
@@ -67,7 +57,6 @@ function computeCategoryStats(testpasses: TestpassDto[]): CategoryStats {
       const t = new Date(tp.endTime).getTime();
       if (!isNaN(t) && (maxEnd === null || t > maxEnd)) maxEnd = t;
     }
-    cpuSeconds += parseDurationToSeconds(tp.duration);
     if (isPassed(tp.result)) passed++;
     else if (isFailed(tp.result)) failed++;
   }
@@ -77,7 +66,7 @@ function computeCategoryStats(testpasses: TestpassDto[]): CategoryStats {
       ? Math.max(0, (maxEnd - minStart) / 1000)
       : 0;
 
-  return { total: testpasses.length, passed, failed, wallClockSeconds, cpuSeconds };
+  return { total: testpasses.length, passed, failed, wallClockSeconds };
 }
 
 const statBoxStyle: React.CSSProperties = {
@@ -257,8 +246,7 @@ export default function SummaryDashboard({
               <span style={{ color: "#666" }}>({cat.total})</span>
               <PassFailMarker passed={cat.passed} failed={cat.failed} />
               <span style={{ color: "#888", fontSize: 12 }}>
-                Wall {formatDuration(cat.wallClockSeconds)} · CPU{" "}
-                {formatDuration(cat.cpuSeconds)}
+                Wall {formatDuration(cat.wallClockSeconds)}
               </span>
             </div>
           ))}
@@ -273,8 +261,7 @@ export default function SummaryDashboard({
               <span style={{ color: "#666" }}>({cat.total})</span>
               <PassFailMarker passed={cat.passed} failed={cat.failed} />
               <span style={{ color: "#888", fontSize: 12 }}>
-                Wall {formatDuration(cat.wallClockSeconds)} · CPU{" "}
-                {formatDuration(cat.cpuSeconds)}
+                Wall {formatDuration(cat.wallClockSeconds)}
               </span>
             </div>
           ))}

@@ -154,6 +154,9 @@ public class AggregatedTestpassResult
         }
     }
 
+    private static bool IsInProgressStatus(string? status) =>
+        status is "Running" or "InProgress" or "Queued";
+
     public string? Result
     {
         get
@@ -163,6 +166,12 @@ public class AggregatedTestpassResult
                 if (NovaTestpass is null)
                 {
                     return "Unknown";
+                }
+
+                // Don't report incomplete rates as failure while the testpass is still running
+                if (IsInProgressStatus(NovaTestpass.StatusName))
+                {
+                    return "InProgress";
                 }
 
                 return NovaTestpass.PassRate < 100 || NovaTestpass.ExecutionRate < 100 ? "Failed" : "Passed";
@@ -181,6 +190,12 @@ public class AggregatedTestpassResult
                 if (NovaTestpass is null)
                 {
                     return "Unknown";
+                }
+
+                // Don't report incomplete rates as failure while the testpass is still running
+                if (IsInProgressStatus(NovaTestpass.StatusName))
+                {
+                    return "InProgress";
                 }
 
                 return NovaTestpass.PassRate < 100 || NovaTestpass.ExecutionRate < 100 ? "Failed" : "Passed";

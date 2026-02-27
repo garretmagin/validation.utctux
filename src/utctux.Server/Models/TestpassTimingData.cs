@@ -29,8 +29,9 @@ public class TestpassTimingData
         : null;
 
     public bool IsPassed => Result.Contains("Passed");
-    public bool IsFailed => !IsPassed && !IsRunning;
+    public bool IsFailed => !IsPassed && !IsRunning && !IsWaitingForDependencies;
     public bool IsRunning => Status is "Running" or "InProgress" or "Queued";
+    public bool IsWaitingForDependencies => Status is "WaitingForDependencies" or "NotStarted";
 
     /// <summary>
     /// True when the Run entry was discovered via Nova only (no UTCT TestpassSummary).

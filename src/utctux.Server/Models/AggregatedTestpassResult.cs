@@ -149,13 +149,22 @@ public class AggregatedTestpassResult
             }
             else
             {
-                return NovaTestpass?.StatusName;
+                var novaStatus = NovaTestpass?.StatusName;
+                if (novaStatus == "NotStarted" && HasPendingDependencies)
+                {
+                    return "WaitingForDependencies";
+                }
+                return novaStatus;
             }
         }
     }
 
     private static bool IsInProgressStatus(string? status) =>
         status is "Running" or "InProgress" or "Queued";
+
+    private bool HasPendingDependencies =>
+        ChunkAvailability is { Count: > 0 } &&
+        ChunkAvailability.Any(c => c.AvailableAt is null);
 
     public string? Result
     {
@@ -172,6 +181,12 @@ public class AggregatedTestpassResult
                 if (IsInProgressStatus(NovaTestpass.StatusName))
                 {
                     return "InProgress";
+                }
+
+                // Testpass hasn't started and is waiting for chunk dependencies
+                if (NovaTestpass.StatusName == "NotStarted" && HasPendingDependencies)
+                {
+                    return "WaitingForDependencies";
                 }
 
                 return NovaTestpass.PassRate < 100 || NovaTestpass.ExecutionRate < 100 ? "Failed" : "Passed";
@@ -196,6 +211,12 @@ public class AggregatedTestpassResult
                 if (IsInProgressStatus(NovaTestpass.StatusName))
                 {
                     return "InProgress";
+                }
+
+                // Testpass hasn't started and is waiting for chunk dependencies
+                if (NovaTestpass.StatusName == "NotStarted" && HasPendingDependencies)
+                {
+                    return "WaitingForDependencies";
                 }
 
                 return NovaTestpass.PassRate < 100 || NovaTestpass.ExecutionRate < 100 ? "Failed" : "Passed";

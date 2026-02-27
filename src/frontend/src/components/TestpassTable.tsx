@@ -14,6 +14,7 @@ const STATUS_COLORS: Record<string, string> = {
   Passed: "#009000",
   Failed: "#cd2828",
   Running: "#0078d4",
+  InProgress: "#0078d4",
 };
 
 const DEFAULT_STATUS_COLOR = "#a0a0a0";

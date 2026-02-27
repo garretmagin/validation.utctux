@@ -261,7 +261,11 @@ export default function MiniGanttChart({
   testpass,
   buildRegistrationDate,
 }: MiniGanttChartProps) {
-  if (!testpass.startTime) {
+  const hasChunkData = (testpass.dependentChunks ?? []).some(
+    (c) => parseTimeSpanToMs(c.availableAfterBuildStart) != null
+  );
+
+  if (!testpass.startTime && !(buildRegistrationDate && hasChunkData)) {
     return (
       <div
         style={{
@@ -279,9 +283,13 @@ export default function MiniGanttChart({
     );
   }
 
+  const hasStartTime = !!testpass.startTime;
+
   const buildStart = buildRegistrationDate
     ? new Date(buildRegistrationDate).getTime()
-    : new Date(testpass.startTime).getTime();
+    : hasStartTime
+      ? new Date(testpass.startTime).getTime()
+      : Date.now();
 
   const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();
 
@@ -319,15 +327,17 @@ export default function MiniGanttChart({
 
   // --- Runs (current first, then reruns) ---
   const allRuns: { run: TestpassDto; isCurrent: boolean }[] = [];
-  if (testpass.runs && testpass.runs.length > 0) {
-    // Current run first, then non-current
-    const currentRuns = testpass.runs.filter((r) => r.isCurrentRun);
-    const otherRuns = testpass.runs.filter((r) => !r.isCurrentRun);
-    for (const r of currentRuns) allRuns.push({ run: r, isCurrent: true });
-    for (const r of otherRuns) allRuns.push({ run: r, isCurrent: false });
-  } else {
-    // No runs array — use the testpass itself as the sole run
-    allRuns.push({ run: testpass, isCurrent: true });
+  if (hasStartTime) {
+    if (testpass.runs && testpass.runs.length > 0) {
+      // Current run first, then non-current
+      const currentRuns = testpass.runs.filter((r) => r.isCurrentRun);
+      const otherRuns = testpass.runs.filter((r) => !r.isCurrentRun);
+      for (const r of currentRuns) allRuns.push({ run: r, isCurrent: true });
+      for (const r of otherRuns) allRuns.push({ run: r, isCurrent: false });
+    } else {
+      // No runs array — use the testpass itself as the sole run
+      allRuns.push({ run: testpass, isCurrent: true });
+    }
   }
 
   // --- Time axis ticks (snapped to 15-min boundaries) ---
@@ -419,28 +429,32 @@ export default function MiniGanttChart({
       )}
 
       {/* Testpass run rows — section header */}
-      <div
-        style={{
-          fontSize: "10px",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          color: "#0078d4",
-          letterSpacing: "0.5px",
-          padding: "4px 0 2px",
-        }}
-      >
-        Execution
-      </div>
-      {allRuns.map(({ run, isCurrent }, i) => (
-        <TestpassBar
-          key={i}
-          run={run}
-          toPct={toPct}
-          executionSystem={testpass.executionSystem}
-          isCurrent={isCurrent}
-          hasMultipleRuns={allRuns.length > 1}
-        />
-      ))}
+      {allRuns.length > 0 && (
+        <>
+          <div
+            style={{
+              fontSize: "10px",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              color: "#0078d4",
+              letterSpacing: "0.5px",
+              padding: "4px 0 2px",
+            }}
+          >
+            Execution
+          </div>
+          {allRuns.map(({ run, isCurrent }, i) => (
+            <TestpassBar
+              key={i}
+              run={run}
+              toPct={toPct}
+              executionSystem={testpass.executionSystem}
+              isCurrent={isCurrent}
+              hasMultipleRuns={allRuns.length > 1}
+            />
+          ))}
+        </>
+      )}
 
       {/* Time axis */}
       <div

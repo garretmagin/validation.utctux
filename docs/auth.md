@@ -75,6 +75,7 @@ The SPA app (`a557232a...`) is pre-authorized for the `access_as_user` scope, wh
 - `http://localhost:5173` (Vite dev server)
 - `https://localhost:7394` (ASP.NET Core HTTPS)
 - `https://server.whitedune-20b41d8c.westus2.azurecontainerapps.io` (Azure Container Apps)
+- `https://ux.utct.dev` (Production custom domain)
 
 **API Permissions:**
 - `utctux-api` → `access_as_user` (Delegated)

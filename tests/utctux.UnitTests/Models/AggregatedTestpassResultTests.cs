@@ -401,7 +401,7 @@ public class AggregatedTestpassResultTests
         var result = new AggregatedTestpassResult
         {
             TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.CloudTest },
-            TestSession = new CloudTestSession { Status = "Running", Result = "Unknown" },
+            TestSession = new TestSession { Status = "Running", Result = "Unknown" },
         };
 
         result.Result.ShouldBe("InProgress");

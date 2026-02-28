@@ -283,4 +283,152 @@ public class BuildTimingTests(ITestOutputHelper output)
         var chainsFound = builds.Count(b => b.RelatedBuilds.Count > 0);
         output.WriteLine($"Builds with restart chains: {chainsFound}");
     }
+
+    [Fact]
+    public async Task DiagnoseChunkAvailability_FpaChunk()
+    {
+        const string fqbn = "29542.1000.main.260226-1659";
+        const string targetChunk = "fpa";
+
+        output.WriteLine($"=== Diagnosing chunk '{targetChunk}' availability for build {fqbn} ===\n");
+
+        var (authService, loggerFactory) = CreateAuthService();
+        var discoverClient = authService.GetDiscoverClient();
+
+        // Step 1: Resolve build identity to get BuildGuid
+        var buildVersion = DiscoverBuildVersion.FromAnySupportedFormat(fqbn);
+        var search = new OfficialSearchParameterFactory()
+            .SetWindowsBuildVersion(buildVersion)
+            .SetOfficiality(true);
+
+        var builds = await discoverClient.SearchBuildsAsync(search);
+        var build = builds.FirstOrDefault();
+        Assert.NotNull(build);
+
+        Guid? buildGuid = null;
+        try { buildGuid = build.Document.Properties.Definition?.BuildGuid; }
+        catch { /* key missing */ }
+        output.WriteLine($"Build GUID from Discover: {buildGuid}");
+
+        // Step 2: Load full pipeline to get testpass dependencies
+        var svc = CreateTestDataService();
+        var progress = new Progress<string>(msg => output.WriteLine($"  [Progress] {msg}"));
+        var (results, _, _) = await svc.LoadTestResultsAsync(fqbn, progress);
+        output.WriteLine($"\nFull pipeline loaded: {results.Count} testpasses");
+
+        // Find testpasses that have "fpa" in their chunk dependencies
+        var resultsWithFpa = results
+            .Where(r => r.ChunkAvailability.Any(c =>
+                string.Equals(c.ChunkName, targetChunk, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        output.WriteLine($"Testpasses with '{targetChunk}' in ChunkAvailability: {resultsWithFpa.Count}");
+        foreach (var r in resultsWithFpa.Take(5))
+        {
+            var chunk = r.ChunkAvailability.First(c =>
+                string.Equals(c.ChunkName, targetChunk, StringComparison.OrdinalIgnoreCase));
+            output.WriteLine($"  {r.TestpassSummary?.TestpassName}");
+            output.WriteLine($"    AvailableAt={chunk.AvailableAt} StartedAt={chunk.StartedAt}");
+            output.WriteLine($"    SubDeps={chunk.SubDependencies?.Count ?? 0}");
+        }
+
+        // Find testpasses whose UTCT dependencies mention "fpa" but it's missing from results
+        var testpassesWithFpaDep = results
+            .Where(r => r.TestpassSummary?.TestpassDependencies?.Any(d =>
+                string.Equals(d.Drop, targetChunk, StringComparison.OrdinalIgnoreCase)) == true)
+            .ToList();
+
+        output.WriteLine($"\nTestpasses with '{targetChunk}' in UTCT TestpassDependencies: {testpassesWithFpaDep.Count}");
+        foreach (var r in testpassesWithFpaDep.Take(5))
+        {
+            var dep = r.TestpassSummary!.TestpassDependencies!.First(d =>
+                string.Equals(d.Drop, targetChunk, StringComparison.OrdinalIgnoreCase));
+            output.WriteLine($"  {r.TestpassSummary.TestpassName}");
+            output.WriteLine($"    Dep: BuildGuid={dep.BuildGuid} Drop={dep.Drop} Flavor={dep.Flavor}");
+
+            var hasInResult = r.ChunkAvailability.Any(c =>
+                string.Equals(c.ChunkName, targetChunk, StringComparison.OrdinalIgnoreCase));
+            output.WriteLine($"    In ChunkAvailability result: {hasInResult}");
+        }
+
+        // Step 3: Try querying Discover for "fpa" using the testpass dependency info
+        if (testpassesWithFpaDep.Count > 0)
+        {
+            var dep = testpassesWithFpaDep[0].TestpassSummary!.TestpassDependencies!
+                .First(d => string.Equals(d.Drop, targetChunk, StringComparison.OrdinalIgnoreCase));
+
+            output.WriteLine($"\n--- Discover GetDropAsync with testpass dep info ---");
+            output.WriteLine($"  Drop={dep.Drop} BuildGuid={dep.BuildGuid} Flavor={dep.Flavor}");
+            try
+            {
+                var drop = await discoverClient.GetDropAsync(dep.Drop, Guid.Parse(dep.BuildGuid), dep.Flavor);
+                output.WriteLine($"  Result: Created={drop.Created} Id={drop.Id}");
+            }
+            catch (Exception ex)
+            {
+                output.WriteLine($"  FAILED: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+        if (buildGuid.HasValue)
+        {
+            var flavors = new[] { "amd64fre", "arm64fre", "x86fre" };
+            output.WriteLine($"\n--- Discover GetDropAsync with build GUID {buildGuid} ---");
+            foreach (var flavor in flavors)
+            {
+                try
+                {
+                    var drop = await discoverClient.GetDropAsync(targetChunk, buildGuid.Value, flavor);
+                    output.WriteLine($"  [{flavor}] Created={drop.Created} Id={drop.Id}");
+                }
+                catch (Exception ex)
+                {
+                    output.WriteLine($"  [{flavor}] FAILED: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+
+        // Step 5: Check the media creation graph for "fpa"
+        if (buildGuid.HasValue)
+        {
+            output.WriteLine($"\n--- Media Creation graph lookup ---");
+            var mediaService = new MediaCreationService(authService, loggerFactory.CreateLogger<MediaCreationService>());
+            var graph = await mediaService.GetRequestGraphForBuildAsync(buildGuid.Value);
+
+            if (graph is null)
+            {
+                output.WriteLine("  No media creation graph found for this build");
+            }
+            else
+            {
+                var buildable = (graph.BuildableArtifacts ?? [])
+                    .Where(a => string.Equals(a.Name, targetChunk, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var external = (graph.ExternalArtifacts ?? [])
+                    .Where(a => string.Equals(a.Name, targetChunk, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                output.WriteLine($"  Buildable artifacts matching '{targetChunk}': {buildable.Count}");
+                foreach (var a in buildable)
+                {
+                    output.WriteLine($"    id={a.Id} name={a.Name} flavor={a.Flavor} state={a.CurrentState}");
+                    if (a.ArtifactExecutionInfo is { } ei)
+                        output.WriteLine($"    start={ei.StartTimeUtc} end={ei.EndTimeUtc}");
+                }
+
+                output.WriteLine($"  External artifacts matching '{targetChunk}': {external.Count}");
+                foreach (var a in external)
+                {
+                    output.WriteLine($"    id={a.Id} name={a.Name} flavor={a.Flavor} state={a.CurrentState}");
+                    if (a.ArtifactExecutionInfo is { } ei)
+                        output.WriteLine($"    start={ei.StartTimeUtc} end={ei.EndTimeUtc}");
+                }
+
+                // Check if "fpa" appears in dependency relations
+                var deps = graph.DependsOnRelations ?? new();
+                var asDependent = deps.Where(kv => kv.Value.Any(id =>
+                    buildable.Concat(external).Any(a => a.Id == id))).ToList();
+                output.WriteLine($"  Artifacts that depend on '{targetChunk}': {asDependent.Count}");
+            }
+        }
+    }
 }

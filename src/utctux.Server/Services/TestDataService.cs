@@ -89,12 +89,13 @@ public class TestDataService
             "Loaded {UtctCount} UTCT testpasses, {CtCount} CloudTest sessions, {NovaCount} Nova testpasses",
             summaryList.Count, cloudTestData.Count, novaData.Count);
 
-        // Phase 2: Load chunk availability if requested
+        // Phase 2: Load chunk availability — collect chunks from both testpass dependencies
+        // and media graph artifacts, then query Discover for all of them in one batch
         var chunkLookup = new Dictionary<string, ChunkAvailabilityInfo>();
         if (loadChunkData && summaryList.Count > 0)
         {
             progress?.Report("Loading chunk availability...");
-            chunkLookup = await LoadChunkAvailabilityAsync(summaryList, buildStartTime, progress);
+            chunkLookup = await LoadChunkAvailabilityAsync(summaryList, mediaGraph, buildGuid, buildStartTime, progress);
         }
 
         // Phase 3: Aggregate results
@@ -102,7 +103,7 @@ public class TestDataService
         var results = AggregateResults(summaryList, cloudTestData, novaData, chunkLookup);
 
         // Phase 3.5: Enrich chunks with media creation graph data
-        EnrichChunksWithMediaGraph(results, mediaGraph, buildStartTime);
+        EnrichChunksWithMediaGraph(results, mediaGraph, buildStartTime, chunkLookup);
         progress?.Report("Enriched chunk dependencies with media creation graph data.");
 
         // Phase 4: Resolve rerun data
@@ -358,21 +359,42 @@ public class TestDataService
 
     private async Task<Dictionary<string, ChunkAvailabilityInfo>> LoadChunkAvailabilityAsync(
         IReadOnlyList<UtctTestpass> summaryList,
+        FullRequestGraph? mediaGraph,
+        Guid? buildGuid,
         DateTimeOffset? buildStartTime,
         IProgress<string>? progress = null)
     {
-        var lookup = new Dictionary<string, ChunkAvailabilityInfo>();
+        var lookup = new Dictionary<string, ChunkAvailabilityInfo>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
             var discoverClient = _authService.GetDiscoverClient();
 
             // Collect unique (BuildGuid, Drop, Flavor) tuples from testpass dependencies
-            var allDropEntries = summaryList
+            var testpassDrops = summaryList
                 .SelectMany(tp => tp.TestpassDependencies ?? [])
                 .Where(d => !string.IsNullOrEmpty(d.Drop) && !string.IsNullOrEmpty(d.BuildGuid) && !string.IsNullOrEmpty(d.Flavor))
-                .Select(d => (d.BuildGuid, d.Drop, d.Flavor))
+                .Select(d => (BuildGuid: Guid.Parse(d.BuildGuid), Drop: d.Drop, Flavor: d.Flavor))
                 .Distinct()
+                .ToList();
+
+            // Also collect chunks from the media creation graph (buildable + external artifacts)
+            var mediaGraphDrops = new List<(Guid BuildGuid, string Drop, string Flavor)>();
+            if (mediaGraph is not null && buildGuid.HasValue)
+            {
+                var allArtifacts = (mediaGraph.BuildableArtifacts ?? [])
+                    .Concat(mediaGraph.ExternalArtifacts ?? []);
+
+                mediaGraphDrops = allArtifacts
+                    .Where(a => !string.IsNullOrEmpty(a.Name) && !string.IsNullOrEmpty(a.Flavor))
+                    .Select(a => (BuildGuid: buildGuid.Value, Drop: a.Name, Flavor: a.Flavor!))
+                    .ToList();
+            }
+
+            // Merge and deduplicate all drop entries
+            var allDropEntries = testpassDrops
+                .Concat(mediaGraphDrops)
+                .DistinctBy(e => (e.Drop.ToUpperInvariant(), e.Flavor.ToUpperInvariant()))
                 .ToList();
 
             if (allDropEntries.Count == 0)
@@ -380,14 +402,15 @@ public class TestDataService
                 return lookup;
             }
 
-            _logger.LogInformation("Loading chunk availability for {Count} unique drops", allDropEntries.Count);
+            _logger.LogInformation("Loading chunk availability for {Count} unique drops ({TestpassCount} from testpasses, {MediaCount} from media graph)",
+                allDropEntries.Count, testpassDrops.Count, mediaGraphDrops.Count);
 
             // Fire GetDropAsync calls in parallel
             var dropTasks = allDropEntries.Select(async entry =>
             {
                 try
                 {
-                    var drop = await discoverClient.GetDropAsync(entry.Drop, Guid.Parse(entry.BuildGuid), entry.Flavor).ConfigureAwait(false);
+                    var drop = await discoverClient.GetDropAsync(entry.Drop, entry.BuildGuid, entry.Flavor).ConfigureAwait(false);
                     return (entry, Drop: drop, Success: true);
                 }
                 catch (Exception ex)
@@ -414,12 +437,18 @@ public class TestDataService
                     ? availableTime.Value - buildStartTime.Value
                     : null;
 
+                // Key by BuildGuid:Drop:Flavor for testpass dependency resolution
                 var key = $"{result.entry.BuildGuid}:{result.entry.Drop}:{result.entry.Flavor}";
-                lookup[key] = new ChunkAvailabilityInfo(
+                var info = new ChunkAvailabilityInfo(
                     result.entry.Drop,
                     result.entry.Flavor,
                     delta,
                     availableTime);
+                lookup.TryAdd(key, info);
+
+                // Also key by Drop:Flavor for media graph sub-dependency resolution
+                var nameKey = $"{result.entry.Drop}:{result.entry.Flavor}";
+                lookup.TryAdd(nameKey, info);
             }
 
             _logger.LogInformation("Loaded chunk availability for {Resolved}/{Total} drops", lookup.Count, allDropEntries.Count);
@@ -857,7 +886,8 @@ public class TestDataService
     private void EnrichChunksWithMediaGraph(
         List<AggregatedTestpassResult> results,
         FullRequestGraph? mediaGraph,
-        DateTimeOffset? buildStartTime)
+        DateTimeOffset? buildStartTime,
+        Dictionary<string, ChunkAvailabilityInfo> mediaGraphChunkLookup)
     {
         if (mediaGraph is null) return;
 
@@ -901,7 +931,8 @@ public class TestDataService
 
                     // Resolve sub-dependencies (full transitive closure)
                     var subDeps = ResolveSubDependencies(
-                        matchedArtifact.Id, dependsOn, artifactsById, buildStartTime, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                        matchedArtifact.Id, dependsOn, artifactsById, buildStartTime,
+                        mediaGraphChunkLookup, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
                     enrichedChunks.Add(chunk with
                     {
@@ -924,6 +955,7 @@ public class TestDataService
         Dictionary<string, IReadOnlyList<string>> dependsOn,
         Dictionary<string, MediaCreationArtifact> artifactsById,
         DateTimeOffset? buildStartTime,
+        Dictionary<string, ChunkAvailabilityInfo> mediaGraphChunkLookup,
         HashSet<string> visited)
     {
         var result = new List<ChunkAvailabilityInfo>();
@@ -938,10 +970,22 @@ public class TestDataService
             if (!artifactsById.TryGetValue(depId, out var depArtifact))
                 continue;
 
-            var availableAt = depArtifact.ArtifactExecutionInfo?.EndTimeUtc;
-            var availableDelta = (availableAt.HasValue && buildStartTime.HasValue)
-                ? availableAt.Value - buildStartTime.Value
-                : (TimeSpan?)null;
+            // Prefer Discover availability (real chunk drop time) over media graph EndTimeUtc
+            var lookupKey = $"{depArtifact.Name}:{depArtifact.Flavor ?? ""}";
+            DateTimeOffset? availableAt;
+            TimeSpan? availableDelta;
+            if (mediaGraphChunkLookup.TryGetValue(lookupKey, out var discoverInfo))
+            {
+                availableAt = discoverInfo.AvailableAt;
+                availableDelta = discoverInfo.AvailableAfterBuildStart;
+            }
+            else
+            {
+                availableAt = depArtifact.ArtifactExecutionInfo?.EndTimeUtc;
+                availableDelta = (availableAt.HasValue && buildStartTime.HasValue)
+                    ? availableAt.Value - buildStartTime.Value
+                    : (TimeSpan?)null;
+            }
 
             var startedAt = depArtifact.ArtifactExecutionInfo?.StartTimeUtc;
             var startedDelta = (startedAt.HasValue && buildStartTime.HasValue)
@@ -949,7 +993,7 @@ public class TestDataService
                 : (TimeSpan?)null;
 
             // Recurse for sub-sub-dependencies
-            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, visited);
+            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, mediaGraphChunkLookup, visited);
 
             result.Add(new ChunkAvailabilityInfo(
                 depArtifact.Name,

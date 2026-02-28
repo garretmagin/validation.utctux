@@ -316,12 +316,18 @@ export default function BuildSelector({
 
   // Pre-select matching build after items are created
   useEffect(() => {
-    if (!initialFqbn || buildItems.length === 0) return;
-    const matchIndex = buildItems.findIndex((item) => item.id === initialFqbn);
-    if (matchIndex >= 0) {
-      buildSelection.select(matchIndex);
+    if (buildItems.length === 0) return;
+    if (initialFqbn) {
+      const matchIndex = buildItems.findIndex((item) => item.id === initialFqbn);
+      if (matchIndex >= 0) {
+        buildSelection.select(matchIndex);
+      }
+    } else {
+      // No route-based FQBN — auto-select the latest build
+      buildSelection.select(0);
+      onFqbnSelected(buildItems[0].id);
     }
-  }, [initialFqbn, buildItems, buildSelection]);
+  }, [initialFqbn, buildItems, buildSelection, onFqbnSelected]);
 
   const branchItems: IListBoxItem[] = useMemo(
     () => branches.map((b) => ({ id: b, text: b })),

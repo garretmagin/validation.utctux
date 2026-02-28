@@ -338,7 +338,7 @@ export default function MiniGanttChart({
       if (avail != null) times.push(buildStart + avail);
       const started = parseTimeSpanToMs(c.startedAfterBuildStart);
       if (started != null) times.push(buildStart + started);
-      if (depth < 2 && c.subDependencies) {
+      if (depth < 10 && c.subDependencies) {
         times.push(...collectChunkTimesMs(c.subDependencies, depth + 1));
       }
     }
@@ -380,7 +380,7 @@ export default function MiniGanttChart({
         const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
         if (deltaMs == null) return null;
         const startMs = parseTimeSpanToMs(chunk.startedAfterBuildStart);
-        const subDeps = depth < 1 && chunk.subDependencies
+        const subDeps = depth < 10 && chunk.subDependencies
           ? prepareChunks(chunk.subDependencies, depth + 1)
           : [];
         return {
@@ -496,7 +496,7 @@ export default function MiniGanttChart({
           </div>
           {(() => {
             // Build flat list of rows with row indices for connector lines
-            const flatRows: {
+            type FlatRow = {
               chunk: PreparedChunk;
               parentStartPct?: number;
               indent: number;
@@ -505,53 +505,47 @@ export default function MiniGanttChart({
               barBorder: string;
               labelFontSize: number;
               rowIndex: number;
-            }[] = [];
-            let rowIdx = 0;
-            for (const c of chunks) {
-              const parentRow = rowIdx;
-              flatRows.push({
-                chunk: c,
-                indent: 0,
-                prefix: "",
-                barColor: "#b4d6fa",
-                barBorder: "#0078d4",
-                labelFontSize: 12,
-                rowIndex: rowIdx++,
-              });
-              for (let si = 0; si < c.subDeps.length; si++) {
-                const isLast = si === c.subDeps.length - 1;
-                flatRows.push({
-                  chunk: c.subDeps[si],
-                  parentStartPct: c.startPct,
-                  indent: 12,
-                  prefix: isLast ? "└ " : "├ ",
-                  barColor: "#dce8f5",
-                  barBorder: "#a0b4c8",
-                  labelFontSize: 10,
-                  rowIndex: rowIdx++,
-                });
-              }
-            }
-            // Identify connector lines: sub-dep diamond → parent start
+            };
+            const flatRows: FlatRow[] = [];
             const connectors: { fromPct: number; toPct: number; fromRow: number; toRow: number }[] = [];
-            let ri = 0;
-            for (const c of chunks) {
-              const parentRowIdx = ri;
-              ri++;
-              if (c.startPct != null) {
-                for (const sub of c.subDeps) {
+            let rowIdx = 0;
+
+            function flattenChunks(
+              items: PreparedChunk[],
+              depth: number,
+              parentRowIdx?: number,
+              parentStartPct?: number,
+            ) {
+              for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const isLast = i === items.length - 1;
+                const myRowIdx = rowIdx++;
+                flatRows.push({
+                  chunk: item,
+                  parentStartPct,
+                  indent: depth * 12,
+                  prefix: depth > 0 ? (isLast ? "└ " : "├ ") : "",
+                  barColor: depth === 0 ? "#b4d6fa" : "#dce8f5",
+                  barBorder: depth === 0 ? "#0078d4" : "#a0b4c8",
+                  labelFontSize: depth === 0 ? 12 : 10,
+                  rowIndex: myRowIdx,
+                });
+                // Connector from this sub-dep's diamond to parent's start
+                if (parentRowIdx != null && parentStartPct != null) {
                   connectors.push({
-                    fromPct: sub.pct,
-                    toPct: c.startPct,
-                    fromRow: ri,
+                    fromPct: item.pct,
+                    toPct: parentStartPct,
+                    fromRow: myRowIdx,
                     toRow: parentRowIdx,
                   });
-                  ri++;
                 }
-              } else {
-                ri += c.subDeps.length;
+                // Recurse into sub-deps
+                if (item.subDeps.length > 0) {
+                  flattenChunks(item.subDeps, depth + 1, myRowIdx, item.startPct);
+                }
               }
             }
+            flattenChunks(chunks, 0);
             const totalRows = rowIdx;
 
             return (

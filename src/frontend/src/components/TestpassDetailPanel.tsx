@@ -86,7 +86,7 @@ function formatDateTime(value: string | null): string {
 function renderDependencyRows(
   chunks: ChunkAvailabilityDto[],
   depth: number = 0,
-  maxDepth: number = 3
+  maxDepth: number = 10
 ): React.ReactNode[] {
   const rows: React.ReactNode[] = [];
   chunks.forEach((chunk, i) => {

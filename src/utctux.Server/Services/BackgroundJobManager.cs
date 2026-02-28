@@ -159,7 +159,7 @@ public class BackgroundJobManager
 
     internal static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildStartTime, IReadOnlyList<DateTimeOffset>? restartTimes = null)
     {
-        int passed = 0, failed = 0, running = 0, unknown = 0;
+        int passed = 0, failed = 0, running = 0, waiting = 0, unknown = 0;
         DateTimeOffset? earliest = null;
         DateTimeOffset? latest = null;
 
@@ -167,6 +167,7 @@ public class BackgroundJobManager
         {
             if (tp.IsPassed) passed++;
             else if (tp.IsRunning) running++;
+            else if (tp.IsWaitingForDependencies) waiting++;
             else if (tp.IsFailed) failed++;
             else unknown++;
 
@@ -190,6 +191,7 @@ public class BackgroundJobManager
                 Passed = passed,
                 Failed = failed,
                 Running = running,
+                Waiting = waiting,
                 Unknown = unknown,
             },
             Testpasses = timingData.Select(MapTestpass).ToList(),

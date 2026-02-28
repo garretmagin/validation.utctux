@@ -32,6 +32,7 @@ public record TestResultsSummary
     public int Passed { get; init; }
     public int Failed { get; init; }
     public int Running { get; init; }
+    public int Waiting { get; init; }
     public int Unknown { get; init; }
 }
 

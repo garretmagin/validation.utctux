@@ -3,7 +3,7 @@ import type { BuildInfo, TestpassDto } from "../types/testResults";
 
 interface SummaryDashboardProps {
   buildInfo: BuildInfo;
-  summary: { total: number; passed: number; failed: number; running: number };
+  summary: { total: number; passed: number; failed: number; running: number; waiting: number };
   testpasses: TestpassDto[];
   timeRange: { min: string | null; max: string | null };
 }
@@ -201,6 +201,10 @@ export default function SummaryDashboard({
         <div style={statBoxStyle}>
           <span style={{ ...statValueStyle, color: "#0078d4" }}>{summary.running}</span>
           <span style={statLabelStyle}>Running</span>
+        </div>
+        <div style={statBoxStyle}>
+          <span style={{ ...statValueStyle, color: "#8764b8" }}>{summary.waiting}</span>
+          <span style={statLabelStyle}>Waiting</span>
         </div>
         <div style={statBoxStyle}>
           <span style={{ ...statValueStyle, color: "#333" }}>

@@ -56,6 +56,7 @@ export interface TestResultsResponse {
     passed: number;
     failed: number;
     running: number;
+    waiting: number;
   };
   testpasses: TestpassDto[];
   timeRange: { min: string | null; max: string | null };

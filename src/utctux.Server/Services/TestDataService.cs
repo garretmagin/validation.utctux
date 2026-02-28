@@ -36,7 +36,7 @@ public class TestDataService
     /// <summary>
     /// Loads and aggregates test results from UTCT, CloudTest, and Nova for a given FQBN.
     /// </summary>
-    public virtual async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildStartTime)> LoadTestResultsAsync(
+    public virtual async Task<(List<AggregatedTestpassResult> Results, DateTimeOffset? BuildStartTime, IReadOnlyList<DateTimeOffset> RestartTimes)> LoadTestResultsAsync(
         string fqbn,
         IProgress<string>? progress = null,
         bool loadChunkData = true,
@@ -46,13 +46,13 @@ public class TestDataService
         progress?.Report("Resolving build identity...");
         _logger.LogInformation("Resolving build identity for FQBN: {Fqbn}", fqbn);
 
-        var (organizationName, projectId, buildId, buildStartTime) = await ResolveBuildIdentityAsync(fqbn, progress);
+        var (organizationName, projectId, buildId, buildStartTime, restartTimes) = await ResolveBuildIdentityAsync(fqbn, progress);
 
         if (organizationName is null || !projectId.HasValue || !buildId.HasValue)
         {
             progress?.Report("⚠ Could not resolve build identity — no ADO build info found.");
             _logger.LogWarning("Could not resolve build identity for FQBN: {Fqbn}", fqbn);
-            return ([], null);
+            return ([], null, []);
         }
 
         var parsedFqbn = Models.WindowsBuildVersion.FromAnySupportedFormat(fqbn);
@@ -98,10 +98,10 @@ public class TestDataService
         await BuildRunsListAsync(results, utctClient, cloudTestData);
 
         progress?.Report($"Loaded {results.Count} test results.");
-        return (results, buildStartTime);
+        return (results, buildStartTime, restartTimes);
     }
 
-    private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? BuildStartTime)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)
+    private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? BuildStartTime, IReadOnlyList<DateTimeOffset> RestartTimes)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)
     {
         try
         {
@@ -117,7 +117,7 @@ public class TestDataService
 
             if (build?.Document?.Properties?.Attributes is null)
             {
-                return (null, null, null, null);
+                return (null, null, null, null, []);
             }
 
             var attrs = build.Document.Properties.Attributes;
@@ -128,7 +128,7 @@ public class TestDataService
             if (!adoBuildId.HasValue || !adoProjectGuid.HasValue || string.IsNullOrEmpty(adoOrg))
             {
                 _logger.LogWarning("Build found but missing ADO info for FQBN: {Fqbn}", fqbn);
-                return (null, null, null, null);
+                return (null, null, null, null, []);
             }
 
             // Parse the ADO org URI to extract org name
@@ -139,12 +139,23 @@ public class TestDataService
             // Otherwise, use the definition revision (this build's queue time).
             // Fallback to ServerCreated if parsing fails.
             DateTimeOffset? buildStartTime = null;
+            var restartTimes = new List<DateTimeOffset>();
+
             if (attrs.TryGetValue("buildingBranchRevision", out var bxloRevObj) &&
                 bxloRevObj is string bxloRev && !string.IsNullOrWhiteSpace(bxloRev))
             {
                 buildStartTime = ParseRevisionTimestamp(bxloRev);
                 if (buildStartTime.HasValue)
                     _logger.LogInformation("Build start from buildingBranchRevision '{Revision}': {StartTime}", bxloRev, buildStartTime);
+
+                // The restart time is when Discover registered the restarted build (Definition.Created)
+                // because the FQBN revision timestamp is intentionally set close to the original.
+                var restartTime = build.Document.Properties.Definition?.Created;
+                if (restartTime.HasValue)
+                {
+                    restartTimes.Add(new DateTimeOffset(restartTime.Value, TimeSpan.Zero));
+                    _logger.LogInformation("Build restart at (Definition.Created): {RestartTime}", restartTime);
+                }
             }
 
             if (!buildStartTime.HasValue)
@@ -161,13 +172,13 @@ public class TestDataService
                 _logger.LogWarning("Could not parse revision timestamp for FQBN {Fqbn}, falling back to ServerCreated: {StartTime}", fqbn, buildStartTime);
             }
 
-            return (orgName, adoProjectGuid.Value, adoBuildId.Value, buildStartTime);
+            return (orgName, adoProjectGuid.Value, adoBuildId.Value, buildStartTime, restartTimes);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to resolve build identity for FQBN: {Fqbn}", fqbn);
             progress?.Report($"⚠ Error resolving build identity: {ex.Message}");
-            return (null, null, null, null);
+            return (null, null, null, null, []);
         }
     }
 

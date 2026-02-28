@@ -12,6 +12,7 @@ public record BuildInfo
     public string? Status { get; init; }
     public string? BuildType { get; init; }
     public IReadOnlyList<BuildInfo> RelatedBuilds { get; init; } = [];
+    public IReadOnlyList<DateTimeOffset> BuildRestartTimes { get; init; } = [];
 }
 
 /// <summary>

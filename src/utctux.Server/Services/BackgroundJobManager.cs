@@ -112,11 +112,11 @@ public class BackgroundJobManager
 
             _logger.LogInformation("Starting data gathering job for FQBN: {Fqbn}", fqbn);
 
-            var (aggregated, buildStartTime) = await _testDataService.LoadTestResultsAsync(fqbn, progress);
+            var (aggregated, buildStartTime, restartTimes) = await _testDataService.LoadTestResultsAsync(fqbn, progress);
 
             // Convert AggregatedTestpassResult[] to TestResultsResponse via TestpassTimingData
             var timingData = aggregated.Select(r => new TestpassTimingData(r)).ToList();
-            var response = MapToTestResultsResponse(fqbn, timingData, buildStartTime);
+            var response = MapToTestResultsResponse(fqbn, timingData, buildStartTime, restartTimes);
 
             _cache.Set(fqbn, new TestResultsCacheEntry { Results = response });
 
@@ -157,7 +157,7 @@ public class BackgroundJobManager
         }
     }
 
-    internal static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildStartTime)
+    internal static TestResultsResponse MapToTestResultsResponse(string fqbn, List<TestpassTimingData> timingData, DateTimeOffset? buildStartTime, IReadOnlyList<DateTimeOffset>? restartTimes = null)
     {
         int passed = 0, failed = 0, running = 0, unknown = 0;
         DateTimeOffset? earliest = null;
@@ -178,7 +178,12 @@ public class BackgroundJobManager
 
         return new TestResultsResponse
         {
-            BuildInfo = new BuildInfo { Fqbn = fqbn, BuildStartTime = buildStartTime },
+            BuildInfo = new BuildInfo
+            {
+                Fqbn = fqbn,
+                BuildStartTime = buildStartTime,
+                BuildRestartTimes = restartTimes ?? [],
+            },
             Summary = new TestResultsSummary
             {
                 Total = timingData.Count,

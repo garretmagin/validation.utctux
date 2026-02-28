@@ -12,6 +12,7 @@ interface GanttChartProps {
   timeRange: { min: string | null; max: string | null };
   onBarClick?: (testpassName: string) => void;
   buildStartTime?: string | null;
+  buildRestartTimes?: string[];
 }
 
 function parseDuration(duration: string): number {
@@ -113,11 +114,13 @@ function TimelineRuler({
   bottom,
   firstTestPercent,
   firstTestLabel,
+  restartPercents,
 }: {
   totalSeconds: number;
   bottom?: boolean;
   firstTestPercent?: number;
   firstTestLabel?: string;
+  restartPercents?: number[];
 }) {
   const step = calculateTickStep(totalSeconds);
   const marks = [];
@@ -197,6 +200,38 @@ function TimelineRuler({
             zIndex: 1,
           }}
         />
+        {/* Build restart markers */}
+        {restartPercents?.map((pct, i) => (
+          <span key={`restart-${i}`}>
+            {!bottom && (
+              <span
+                style={{
+                  position: "absolute",
+                  left: `${pct.toFixed(1)}%`,
+                  transform: "rotate(-45deg)",
+                  transformOrigin: "bottom left",
+                  fontWeight: 600,
+                  color: "#004578",
+                  fontSize: "11px",
+                  top: "-14px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Build Restarted
+              </span>
+            )}
+            <span
+              style={{
+                position: "absolute",
+                left: `${pct.toFixed(1)}%`,
+                top: 0,
+                bottom: 0,
+                borderLeft: "2px dashed #004578",
+                zIndex: 1,
+              }}
+            />
+          </span>
+        ))}
         {marks}
       </div>
     </div>
@@ -320,7 +355,7 @@ function GanttBar({
   );
 }
 
-export default function GanttChart({ testpasses, timeRange, onBarClick, buildStartTime }: GanttChartProps) {
+export default function GanttChart({ testpasses, timeRange, onBarClick, buildStartTime, buildRestartTimes }: GanttChartProps) {
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -383,6 +418,19 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
     ? formatElapsedTime(firstTestOffsetSeconds)
     : undefined;
 
+  // Compute restart marker positions
+  const restartPercents = useMemo(() => {
+    if (!buildRestartTimes || buildRestartTimes.length === 0) return undefined;
+    return buildRestartTimes
+      .map(t => {
+        const ms = new Date(t).getTime();
+        const offsetSec = (ms - minTime) / 1000;
+        if (offsetSec <= 0 || offsetSec >= totalSeconds) return null;
+        return (offsetSec / totalSeconds) * 100;
+      })
+      .filter((p): p is number => p != null);
+  }, [buildRestartTimes, minTime, totalSeconds]);
+
   if (sortedTestpasses.length === 0) {
     return null;
   }
@@ -444,6 +492,7 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
           totalSeconds={totalSeconds}
           firstTestPercent={firstTestPercent}
           firstTestLabel={firstTestLabel}
+          restartPercents={restartPercents}
         />
 
         {/* Gantt rows */}
@@ -504,6 +553,7 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
           bottom
           firstTestPercent={firstTestPercent}
           firstTestLabel={firstTestLabel}
+          restartPercents={restartPercents}
         />
       </div>
     </Card>

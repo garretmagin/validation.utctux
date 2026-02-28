@@ -55,7 +55,7 @@ public class RerunDataTests(ITestOutputHelper output)
         var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
 
         // Act
-        var (results, _) = await svc.LoadTestResultsAsync(Fqbn, progress);
+        var (results, _, _) = await svc.LoadTestResultsAsync(Fqbn, progress);
 
         // Assert — find the specific testpass
         var testpass = results.FirstOrDefault(r =>
@@ -110,7 +110,7 @@ public class RerunDataTests(ITestOutputHelper output)
         var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
 
         // Act
-        var (results, _) = await svc.LoadTestResultsAsync(singleRunFqbn, progress);
+        var (results, _, _) = await svc.LoadTestResultsAsync(singleRunFqbn, progress);
 
         // Assert — find the specific testpass
         var testpass = results.FirstOrDefault(r =>
@@ -150,7 +150,7 @@ public class RerunDataTests(ITestOutputHelper output)
         var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
 
         // Act
-        var (results, _) = await svc.LoadTestResultsAsync(fqbn, progress);
+        var (results, _, _) = await svc.LoadTestResultsAsync(fqbn, progress);
 
         // Assert — find the specific testpass
         var testpass = results.FirstOrDefault(r =>
@@ -230,7 +230,7 @@ public class RerunDataTests(ITestOutputHelper output)
         // Step 1: Load full test results to find the testpass
         var svc = CreateTestDataService();
         var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
-        var (results, buildRegDate) = await svc.LoadTestResultsAsync(fqbn, progress);
+        var (results, buildRegDate, _) = await svc.LoadTestResultsAsync(fqbn, progress);
 
         output.WriteLine($"\n=== Build: {fqbn} ===");
         output.WriteLine($"Build registration date: {buildRegDate}");

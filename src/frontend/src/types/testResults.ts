@@ -18,6 +18,7 @@ export interface BuildInfo {
   status: string;
   buildType: string | null;
   relatedBuilds: BuildInfo[];
+  buildRestartTimes: string[];
 }
 
 export interface ChunkAvailabilityDto {

@@ -136,6 +136,7 @@ export default function TestResultsPage() {
                 timeRange={results.timeRange}
                 onBarClick={onGanttBarClick}
                 buildStartTime={results.buildInfo.buildStartTime}
+                buildRestartTimes={results.buildInfo.buildRestartTimes}
               />
             </div>
 

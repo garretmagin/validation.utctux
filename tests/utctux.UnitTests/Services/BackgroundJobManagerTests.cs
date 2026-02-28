@@ -75,7 +75,7 @@ public class BackgroundJobManagerTests
         // Setup: LoadTestResultsAsync will never complete (we don't await it)
         _testDataServiceMock
             .Setup(s => s.LoadTestResultsAsync(It.IsAny<string>(), It.IsAny<IProgress<string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .Returns(new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?)>().Task);
+            .Returns(new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?, IReadOnlyList<DateTimeOffset>)>().Task);
 
         var result = _jobManager.TryStartJob("new-fqbn");
 
@@ -88,7 +88,7 @@ public class BackgroundJobManagerTests
     {
         _testDataServiceMock
             .Setup(s => s.LoadTestResultsAsync(It.IsAny<string>(), It.IsAny<IProgress<string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .Returns(new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?)>().Task);
+            .Returns(new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?, IReadOnlyList<DateTimeOffset>)>().Task);
 
         _jobManager.TryStartJob("dup-fqbn");
 
@@ -101,8 +101,8 @@ public class BackgroundJobManagerTests
     public void TryStartJob_CompletedWithCache_ReturnsFalse()
     {
         var fqbn = "completed-fqbn";
-        var tcs = new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?)>();
-        tcs.SetResult(([], null));
+        var tcs = new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?, IReadOnlyList<DateTimeOffset>)>();
+        tcs.SetResult(([], null, Array.Empty<DateTimeOffset>()));
 
         _testDataServiceMock
             .Setup(s => s.LoadTestResultsAsync(fqbn, It.IsAny<IProgress<string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -125,7 +125,7 @@ public class BackgroundJobManagerTests
 
         _testDataServiceMock
             .Setup(s => s.LoadTestResultsAsync(It.IsAny<string>(), It.IsAny<IProgress<string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .Returns(new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?)>().Task);
+            .Returns(new TaskCompletionSource<(List<AggregatedTestpassResult>, DateTimeOffset?, IReadOnlyList<DateTimeOffset>)>().Task);
 
         var result = _jobManager.TryStartJob(fqbn, forceRefresh: true);
 
@@ -199,7 +199,7 @@ public class BackgroundJobManagerTests
         var response = BackgroundJobManager.MapToTestResultsResponse("test-fqbn", timingData, regDate);
 
         response.TimeRange!.Min.ShouldBe(regDate);
-        response.BuildInfo!.RegistrationDate.ShouldBe(regDate);
+        response.BuildInfo!.BuildStartTime.ShouldBe(regDate);
     }
 
     [Fact]

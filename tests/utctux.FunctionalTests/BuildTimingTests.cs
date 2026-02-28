@@ -196,7 +196,7 @@ public class BuildTimingTests(ITestOutputHelper output)
         var svc = CreateTestDataService();
         var progress = new Progress<string>(msg => output.WriteLine($"  [Progress] {msg}"));
 
-        var (results, buildStartTime) = await svc.LoadTestResultsAsync(
+        var (results, buildStartTime, _) = await svc.LoadTestResultsAsync(
             StandardFqbn, progress, loadChunkData: false);
 
         Assert.NotNull(buildStartTime);

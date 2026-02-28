@@ -56,7 +56,7 @@ public class InProgressStatusTests(ITestOutputHelper output)
         var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
 
         // Act
-        var (results, _) = await svc.LoadTestResultsAsync(Fqbn, progress);
+        var (results, _, _) = await svc.LoadTestResultsAsync(Fqbn, progress);
 
         // Assert — find the specific testpass
         var testpass = results.FirstOrDefault(r =>
@@ -103,7 +103,7 @@ public class InProgressStatusTests(ITestOutputHelper output)
         var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
 
         // Act
-        var (results, _) = await svc.LoadTestResultsAsync(Fqbn, progress);
+        var (results, _, _) = await svc.LoadTestResultsAsync(Fqbn, progress);
 
         // Assert — find the specific testpass
         var testpass = results.FirstOrDefault(r =>

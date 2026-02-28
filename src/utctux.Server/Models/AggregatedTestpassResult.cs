@@ -145,12 +145,16 @@ public class AggregatedTestpassResult
 
             if (TestpassSummary.ExecutionSystem == ExecutionSystem.CloudTest)
             {
+                if (TestSession is null && HasPendingDependencies)
+                {
+                    return "WaitingForDependencies";
+                }
                 return TestSession?.Status;
             }
             else
             {
                 var novaStatus = NovaTestpass?.StatusName;
-                if (novaStatus == "NotStarted" && HasPendingDependencies)
+                if ((novaStatus is null or "NotStarted") && HasPendingDependencies)
                 {
                     return "WaitingForDependencies";
                 }
@@ -194,6 +198,10 @@ public class AggregatedTestpassResult
 
             if (TestpassSummary.ExecutionSystem == ExecutionSystem.CloudTest)
             {
+                if (TestSession is null && HasPendingDependencies)
+                {
+                    return "WaitingForDependencies";
+                }
                 var ctResult = TestSession?.Result ?? "Unknown";
                 // CloudTest "FailedNonFatal" is still a failure — normalize to "Failed"
                 return string.Equals(ctResult, "FailedNonFatal", StringComparison.OrdinalIgnoreCase)
@@ -204,7 +212,7 @@ public class AggregatedTestpassResult
             {
                 if (NovaTestpass is null)
                 {
-                    return "Unknown";
+                    return HasPendingDependencies ? "WaitingForDependencies" : "Unknown";
                 }
 
                 // Don't report incomplete rates as failure while the testpass is still running

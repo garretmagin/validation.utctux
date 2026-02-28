@@ -269,6 +269,29 @@ public class AggregatedTestpassResultTests
     }
 
     [Fact]
+    public void Status_CloudTest_NoSession_PendingDependencies_ReturnsWaitingForDependencies()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.CloudTest },
+            ChunkAvailability = [new ChunkAvailabilityInfo("chunk1", "amd64fre", null, null)],
+        };
+
+        result.Status.ShouldBe("WaitingForDependencies");
+    }
+
+    [Fact]
+    public void Status_CloudTest_NoSession_NoPendingDependencies_ReturnsNull()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.CloudTest },
+        };
+
+        result.Status.ShouldBeNull();
+    }
+
+    [Fact]
     public void Status_Nova_ReturnsNovaStatus()
     {
         var result = new AggregatedTestpassResult
@@ -278,6 +301,29 @@ public class AggregatedTestpassResultTests
         };
 
         result.Status.ShouldBe("Running");
+    }
+
+    [Fact]
+    public void Status_T3C_NoNova_PendingDependencies_ReturnsWaitingForDependencies()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.T3C },
+            ChunkAvailability = [new ChunkAvailabilityInfo("chunk1", "amd64fre", null, null)],
+        };
+
+        result.Status.ShouldBe("WaitingForDependencies");
+    }
+
+    [Fact]
+    public void Status_T3C_NoNova_NoPendingDependencies_ReturnsNull()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.T3C },
+        };
+
+        result.Status.ShouldBeNull();
     }
 
     [Fact]
@@ -338,6 +384,18 @@ public class AggregatedTestpassResultTests
     }
 
     [Fact]
+    public void Result_CloudTest_NoSession_PendingDependencies_ReturnsWaitingForDependencies()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.CloudTest },
+            ChunkAvailability = [new ChunkAvailabilityInfo("chunk1", "amd64fre", null, null)],
+        };
+
+        result.Result.ShouldBe("WaitingForDependencies");
+    }
+
+    [Fact]
     public void Result_Nova_AllPassing_ReturnsPassed()
     {
         var result = new AggregatedTestpassResult
@@ -371,6 +429,29 @@ public class AggregatedTestpassResultTests
         };
 
         result.Result.ShouldBe("Failed");
+    }
+
+    [Fact]
+    public void Result_T3C_NoNova_PendingDependencies_ReturnsWaitingForDependencies()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.T3C },
+            ChunkAvailability = [new ChunkAvailabilityInfo("chunk1", "amd64fre", null, null)],
+        };
+
+        result.Result.ShouldBe("WaitingForDependencies");
+    }
+
+    [Fact]
+    public void Result_T3C_NoNova_NoPendingDependencies_ReturnsUnknown()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.T3C },
+        };
+
+        result.Result.ShouldBe("Unknown");
     }
 
     [Fact]

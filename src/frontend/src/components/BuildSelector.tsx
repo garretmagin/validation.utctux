@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Dropdown } from "azure-devops-ui/Dropdown";
 import { DropdownSelection } from "azure-devops-ui/Utilities/DropdownSelection";
 import { Spinner, SpinnerSize } from "azure-devops-ui/Spinner";
@@ -182,17 +182,27 @@ export default function BuildSelector({
     fetchBranches();
   }, [authFetch]);
 
+  // Track whether the user has manually changed the branch (to avoid
+  // the auto-sync effect overriding their selection with the old URL FQBN).
+  const userChangedBranchRef = useRef(false);
+
+  // Reset the manual-change flag when the URL catches up (initialFqbn changes)
+  useEffect(() => {
+    userChangedBranchRef.current = false;
+  }, [initialFqbn]);
+
   // Auto-select branch from initialFqbn when branches are loaded
   useEffect(() => {
     if (!initialFqbn || branches.length === 0) return;
+    if (userChangedBranchRef.current) return;
     const branch = parseBranchFromFqbn(initialFqbn);
     if (!branch) return;
     const index = branches.indexOf(branch);
-    if (index >= 0 && selectedBranch !== branch) {
+    if (index >= 0) {
       branchSelection.select(index);
       setSelectedBranch(branch);
     }
-  }, [initialFqbn, branches, branchSelection, selectedBranch]);
+  }, [initialFqbn, branches, branchSelection]);
 
   // Fetch builds when branch changes
   useEffect(() => {
@@ -321,12 +331,12 @@ export default function BuildSelector({
       const matchIndex = buildItems.findIndex((item) => item.id === initialFqbn);
       if (matchIndex >= 0) {
         buildSelection.select(matchIndex);
+        return;
       }
-    } else {
-      // No route-based FQBN — auto-select the latest build
-      buildSelection.select(0);
-      onFqbnSelected(buildItems[0].id);
     }
+    // No match or no initialFqbn — auto-select the latest build
+    buildSelection.select(0);
+    onFqbnSelected(buildItems[0].id);
   }, [initialFqbn, buildItems, buildSelection, onFqbnSelected]);
 
   const branchItems: IListBoxItem[] = useMemo(
@@ -336,6 +346,7 @@ export default function BuildSelector({
 
   const onBranchSelect = useCallback(
     (_event: React.SyntheticEvent<HTMLElement>, item: IListBoxItem) => {
+      userChangedBranchRef.current = true;
       setSelectedBranch(item.id);
       setBuilds([]);
     },

@@ -102,4 +102,4 @@ NuGet feeds: nuget.org + Microsoft `validation.ctproto` (see `nuget.config`).
 
 ## Agent Workflow
 
-- **Do not commit changes.** Stage files and present a summary, but let the user review and commit manually.
+- **Do not commit or stage changes.** Present a summary of changes, but let the user review, stage, and commit manually.

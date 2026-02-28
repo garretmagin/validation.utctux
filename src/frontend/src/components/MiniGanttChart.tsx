@@ -584,22 +584,22 @@ export default function MiniGanttChart({
                     }}
                   >
                     {connectors.map((conn, ci) => {
-                      // Right-angle connector: go straight up from sub-dep, then right to parent start
+                      // Right-angle connector: go right from sub-dep diamond, then up to parent start
                       const fromY = conn.fromRow * ROW_HEIGHT + ROW_HEIGHT / 2;
                       const toY = conn.toRow * ROW_HEIGHT + ROW_HEIGHT / 2;
                       const fromXPct = conn.fromPct;
                       const toXPct = conn.toPct;
                       return (
                         <React.Fragment key={ci}>
-                          {/* Vertical: sub-dep diamond up to parent row */}
+                          {/* Horizontal: from sub-dep diamond across to parent's X */}
                           <line
                             x1={`${fromXPct}%`} y1={fromY}
-                            x2={`${fromXPct}%`} y2={toY}
+                            x2={`${toXPct}%`} y2={fromY}
                             stroke="#c8d6e5" strokeWidth="1" strokeDasharray="3 3"
                           />
-                          {/* Horizontal: across to parent start */}
+                          {/* Vertical: up to parent row */}
                           <line
-                            x1={`${fromXPct}%`} y1={toY}
+                            x1={`${toXPct}%`} y1={fromY}
                             x2={`${toXPct}%`} y2={toY}
                             stroke="#c8d6e5" strokeWidth="1" strokeDasharray="3 3"
                           />

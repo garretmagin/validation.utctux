@@ -15,6 +15,8 @@ interface BuildInfo {
   buildId: number;
   buildStartTime: string;
   status: string;
+  buildType: string | null;
+  relatedBuilds: BuildInfo[];
 }
 
 interface BuildSelectorProps {
@@ -28,7 +30,110 @@ function parseBranchFromFqbn(fqbn: string): string | null {
   return parts.length >= 4 ? parts[parts.length - 2] : null;
 }
 
+/**
+ * Strips the branch name from an FQBN for a shorter display.
+ * E.g., "26572.1002.ge_current_directes_corebuild.260225-2201"
+ *    → "26572.1002.20260225-2201"
+ * Keeps the full timestamp with century prefix for readability.
+ */
+function shortFqbn(fqbn: string): string {
+  const parts = fqbn.split(".");
+  if (parts.length < 4) return fqbn;
+  // parts: [buildNum, qfe, ..., branch, timestamp]
+  const buildNum = parts[0];
+  const qfe = parts[1];
+  const timestamp = parts[parts.length - 1];
+  // Add century prefix if timestamp is YYMMDD-HHMM format
+  const display = /^\d{6}-\d{4}$/.test(timestamp) ? `20${timestamp}` : timestamp;
+  return `${buildNum}.${qfe}.${display}`;
+}
 
+/** Badge styles for BXL/TB type labels */
+const badgeBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "1px 6px",
+  borderRadius: "3px",
+  fontSize: "0.75em",
+  fontWeight: 600,
+  marginRight: "8px",
+  minWidth: "28px",
+  textAlign: "center",
+  backgroundColor: "#e0e0e0",
+  color: "#555",
+  cursor: "default",
+};
+
+const chevronBadge: React.CSSProperties = {
+  ...badgeBase,
+  cursor: "pointer",
+  backgroundColor: "#d0d0d0",
+};
+
+/**
+ * Build type badge that transforms into an expand chevron on hover.
+ * Shows "+N" count indicator next to FQBN for expandable items.
+ */
+function ExpandableBadge({
+  buildType,
+  childCount,
+  isExpanded,
+  onToggle,
+}: {
+  buildType: string | null;
+  childCount: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const hasChildren = childCount > 0;
+
+  if (!hasChildren) {
+    return <span style={badgeBase}>{buildType ?? "?"}</span>;
+  }
+
+  return (
+    <span
+      style={hovered ? chevronBadge : badgeBase}
+      title={isExpanded
+        ? `Hide ${childCount} previous build attempt${childCount > 1 ? "s" : ""}`
+        : `Show ${childCount} previous build attempt${childCount > 1 ? "s" : ""}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onToggle();
+      }}
+    >
+      {hovered
+        ? (isExpanded ? "▾" : "›")
+        : (buildType ?? "?")}
+    </span>
+  );
+}
+
+function NLabel({ label }: { label: string }) {
+  const isLatest = label === "Latest";
+  return (
+    <span style={{ marginLeft: "auto", paddingLeft: "12px" }}>
+      <span
+        style={{
+          display: "inline-block",
+          padding: "2px 8px",
+          borderRadius: "10px",
+          fontSize: "0.75em",
+          fontWeight: 500,
+          backgroundColor: isLatest ? "#e8f5e9" : "#f5f5f5",
+          color: isLatest ? "#2e7d32" : "#888",
+        }}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
 
 export default function BuildSelector({
   initialFqbn,
@@ -40,6 +145,7 @@ export default function BuildSelector({
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [loadingBuilds, setLoadingBuilds] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
   const authFetch = useAuthFetch();
 
   const branchSelection = useMemo(() => new DropdownSelection(), []);
@@ -88,6 +194,7 @@ export default function BuildSelector({
     const fetchBuilds = async () => {
       setLoadingBuilds(true);
       setError(null);
+      setExpandedChains(new Set());
       try {
         const response = await authFetch(
           `/api/builds/branch/${encodeURIComponent(selectedBranch)}?count=20`
@@ -97,11 +204,13 @@ export default function BuildSelector({
         const data: BuildInfo[] = await response.json();
         setBuilds(data);
 
-        // If initialFqbn is provided, pre-select the matching build
+        // If initialFqbn matches a child, auto-expand that chain
         if (initialFqbn) {
-          const matchIndex = data.findIndex((b) => b.fqbn === initialFqbn);
-          if (matchIndex >= 0) {
-            buildSelection.select(matchIndex);
+          for (const b of data) {
+            if (b.relatedBuilds?.some(r => r.fqbn === initialFqbn)) {
+              setExpandedChains(new Set([b.fqbn]));
+              break;
+            }
           }
         }
       } catch (err) {
@@ -113,20 +222,101 @@ export default function BuildSelector({
       }
     };
     fetchBuilds();
-  }, [selectedBranch, initialFqbn, buildSelection, authFetch]);
+  }, [selectedBranch, initialFqbn, authFetch]);
+
+  // Build the flattened item list with custom rendering
+  const buildItems: IListBoxItem[] = useMemo(() => {
+    const items: IListBoxItem[] = [];
+    let nIndex = 0;
+
+    for (const build of builds) {
+      const nLabel = nIndex === 0 ? "Latest" : `N-${nIndex}`;
+      const hasChildren = build.relatedBuilds && build.relatedBuilds.length > 0;
+      const isExpanded = expandedChains.has(build.fqbn);
+      const displayName = shortFqbn(build.fqbn);
+
+      items.push({
+        id: build.fqbn,
+        text: displayName,
+        render: (_rowIndex, _colIndex, _tableColumn, _tableItem) => (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              width: "100%",
+              padding: "6px 8px",
+              cursor: "pointer",
+            }}
+          >
+            <ExpandableBadge
+              buildType={build.buildType}
+              childCount={hasChildren ? build.relatedBuilds.length : 0}
+              isExpanded={isExpanded}
+              onToggle={() => {
+                setExpandedChains(prev => {
+                  const next = new Set(prev);
+                  if (next.has(build.fqbn)) next.delete(build.fqbn);
+                  else next.add(build.fqbn);
+                  return next;
+                });
+              }}
+            />
+            <span style={{ flex: 1 }}>
+              {displayName}
+              {hasChildren && !isExpanded && (
+                <span style={{ marginLeft: "6px", fontSize: "0.8em", color: "#888" }}>
+                  +{build.relatedBuilds.length}
+                </span>
+              )}
+            </span>
+            <NLabel label={nLabel} />
+          </div>
+        ),
+      });
+
+      // Insert expanded children
+      if (hasChildren && isExpanded) {
+        for (const child of build.relatedBuilds) {
+          const childDisplay = shortFqbn(child.fqbn);
+          items.push({
+            id: child.fqbn,
+            text: childDisplay,
+            render: (_rowIndex, _colIndex, _tableColumn, _tableItem) => (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  width: "100%",
+                  padding: "6px 8px",
+                  paddingLeft: "36px",
+                }}
+              >
+                <span style={badgeBase}>{child.buildType ?? "?"}</span>
+                <span>{childDisplay}</span>
+              </div>
+            ),
+          });
+        }
+      }
+
+      nIndex++;
+    }
+
+    return items;
+  }, [builds, expandedChains]);
+
+  // Pre-select matching build after items are created
+  useEffect(() => {
+    if (!initialFqbn || buildItems.length === 0) return;
+    const matchIndex = buildItems.findIndex((item) => item.id === initialFqbn);
+    if (matchIndex >= 0) {
+      buildSelection.select(matchIndex);
+    }
+  }, [initialFqbn, buildItems, buildSelection]);
 
   const branchItems: IListBoxItem[] = useMemo(
     () => branches.map((b) => ({ id: b, text: b })),
     [branches]
-  );
-
-  const buildItems: IListBoxItem[] = useMemo(
-    () =>
-      builds.map((b) => ({
-        id: b.fqbn,
-        text: b.fqbn,
-      })),
-    [builds]
   );
 
   const onBranchSelect = useCallback(

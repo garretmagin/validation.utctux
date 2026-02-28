@@ -10,6 +10,8 @@ public record BuildInfo
     public int? BuildId { get; init; }
     public DateTimeOffset? BuildStartTime { get; init; }
     public string? Status { get; init; }
+    public string? BuildType { get; init; }
+    public IReadOnlyList<BuildInfo> RelatedBuilds { get; init; } = [];
 }
 
 /// <summary>

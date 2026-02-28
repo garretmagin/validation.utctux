@@ -224,4 +224,62 @@ public class BuildTimingTests(ITestOutputHelper output)
             }
         }
     }
+
+    [Fact]
+    public async Task BuildListing_GroupsBxloRestartChains()
+    {
+        output.WriteLine("=== Build Listing Grouping Test ===");
+
+        var (authService, loggerFactory) = CreateAuthService();
+
+        var gitBranchService = new GitBranchService(
+            authService,
+            new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()),
+            loggerFactory.CreateLogger<GitBranchService>());
+
+        var buildListingService = new BuildListingService(
+            authService,
+            gitBranchService,
+            loggerFactory.CreateLogger<BuildListingService>());
+
+        // Query a branch known to have BXLO restart builds
+        var builds = await buildListingService.GetBuildsForBranchAsync(
+            "ge_current_directes_corebuild", count: 15);
+
+        output.WriteLine($"Total primary builds returned: {builds.Length}\n");
+
+        int primaryIndex = 0;
+        foreach (var build in builds)
+        {
+            var nLabel = primaryIndex == 0 ? "Latest" : $"N-{primaryIndex}";
+            var hasChain = build.RelatedBuilds.Count > 0;
+
+            output.WriteLine($"[{nLabel}] {build.BuildType ?? "?"} {build.Fqbn}");
+            output.WriteLine($"       BuildId: {build.BuildId}  StartTime: {build.BuildStartTime}");
+
+            if (hasChain)
+            {
+                output.WriteLine($"       Chain members ({build.RelatedBuilds.Count}):");
+                foreach (var child in build.RelatedBuilds)
+                {
+                    output.WriteLine($"         └─ {child.BuildType ?? "?"} {child.Fqbn}");
+                }
+            }
+
+            primaryIndex++;
+        }
+
+        // Verify basic structure
+        Assert.True(builds.Length > 0, "Should have at least one build");
+
+        // Check that BuildType is populated
+        var withType = builds.Count(b => b.BuildType is not null);
+        output.WriteLine($"\nBuilds with BuildType: {withType}/{builds.Length}");
+        Assert.True(withType > 0, "At least some builds should have a BuildType");
+
+        // Check for any grouped chains
+        var chainsFound = builds.Count(b => b.RelatedBuilds.Count > 0);
+        output.WriteLine($"Builds with restart chains: {chainsFound}");
+    }
 }

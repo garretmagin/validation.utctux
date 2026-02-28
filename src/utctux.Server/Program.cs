@@ -14,6 +14,7 @@ builder.Services.AddSingleton<utctux.Server.Services.TestResultsCache>();
 builder.Services.AddSingleton<utctux.Server.Services.CloudTestService>();
 builder.Services.AddSingleton<utctux.Server.Services.BuildListingService>();
 builder.Services.AddSingleton<utctux.Server.Services.GitBranchService>();
+builder.Services.AddSingleton<utctux.Server.Services.MediaCreationService>();
 builder.Services.AddSingleton<utctux.Server.Services.TestDataService>();
 builder.Services.AddSingleton<utctux.Server.Services.BackgroundJobManager>();
 

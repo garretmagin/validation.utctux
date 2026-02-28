@@ -1,5 +1,5 @@
 import React from "react";
-import type { TestpassDto } from "../types/testResults";
+import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 
 export interface MiniGanttChartProps {
   testpass: TestpassDto;
@@ -117,28 +117,65 @@ function ChunkRow({
   chunkName,
   pct,
   deltaLabel,
+  startPct,
+  barColor = "#b4d6fa",
+  barBorder = "#0078d4",
+  indent = 0,
+  labelFontSize = 12,
+  prefix = "",
 }: {
   chunkName: string;
   pct: number;
   deltaLabel: string;
+  startPct?: number;
+  barColor?: string;
+  barBorder?: string;
+  indent?: number;
+  labelFontSize?: number;
+  prefix?: string;
 }) {
+  const hasSpan = startPct != null && startPct < pct;
   return (
     <div style={rowStyle} title={`${chunkName}: ${deltaLabel}`}>
-      <div style={labelCellStyle} title={chunkName}>
-        {truncate(chunkName, 40)}
+      <div
+        style={{
+          ...labelCellStyle,
+          fontSize: `${labelFontSize}px`,
+          paddingLeft: `${indent}px`,
+        }}
+        title={chunkName}
+      >
+        {prefix}{truncate(chunkName, 40 - prefix.length - Math.floor(indent / 6))}
       </div>
       <div style={trackCellStyle}>
-        {/* Horizontal guide line from 0 to diamond */}
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: 0,
-            width: `${pct}%`,
-            height: "1px",
-            background: "#c8d6e5",
-          }}
-        />
+        {hasSpan ? (
+          /* Production span bar from startPct to pct */
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: `${startPct}%`,
+              width: `${pct - startPct}%`,
+              height: "6px",
+              transform: "translateY(-50%)",
+              background: barColor,
+              border: `1px solid ${barBorder}`,
+              borderRadius: "2px",
+            }}
+          />
+        ) : (
+          /* Horizontal guide line from 0 to diamond */
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              width: `${pct}%`,
+              height: "1px",
+              background: "#c8d6e5",
+            }}
+          />
+        )}
         {/* Diamond marker */}
         <div
           style={{
@@ -293,6 +330,21 @@ export default function MiniGanttChart({
 
   const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();
 
+  // Collect all chunk availability/start times to extend timeline
+  function collectChunkTimesMs(deps: ChunkAvailabilityDto[], depth: number): number[] {
+    const times: number[] = [];
+    for (const c of deps) {
+      const avail = parseTimeSpanToMs(c.availableAfterBuildStart);
+      if (avail != null) times.push(buildStart + avail);
+      const started = parseTimeSpanToMs(c.startedAfterBuildStart);
+      if (started != null) times.push(buildStart + started);
+      if (depth < 2 && c.subDependencies) {
+        times.push(...collectChunkTimesMs(c.subDependencies, depth + 1));
+      }
+    }
+    return times;
+  }
+
   // Find the full extent of the timeline
   let latestEnd = tpEnd;
   if (testpass.runs) {
@@ -302,6 +354,10 @@ export default function MiniGanttChart({
       }
     }
   }
+  const chunkTimes = collectChunkTimesMs(testpass.dependentChunks ?? [], 0);
+  for (const t of chunkTimes) {
+    latestEnd = Math.max(latestEnd, t);
+  }
 
   const rawSpan = latestEnd - buildStart;
   const totalSpanMs = rawSpan > 0 ? rawSpan * 1.05 : 60000;
@@ -310,17 +366,35 @@ export default function MiniGanttChart({
     Math.max(0, Math.min(100, ((timeMs - buildStart) / totalSpanMs) * 100));
 
   // --- Chunk data ---
-  const chunks = (testpass.dependentChunks ?? [])
-    .map((chunk) => {
-      const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
-      if (deltaMs == null) return null;
-      return {
-        chunkName: chunk.chunkName,
-        pct: toPct(buildStart + deltaMs),
-        deltaLabel: formatDeltaShort(deltaMs),
-      };
-    })
-    .filter(Boolean) as { chunkName: string; pct: number; deltaLabel: string }[];
+  interface PreparedChunk {
+    chunkName: string;
+    pct: number;
+    deltaLabel: string;
+    startPct?: number;
+    subDeps: PreparedChunk[];
+  }
+
+  function prepareChunks(deps: ChunkAvailabilityDto[], depth: number): PreparedChunk[] {
+    return deps
+      .map((chunk) => {
+        const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
+        if (deltaMs == null) return null;
+        const startMs = parseTimeSpanToMs(chunk.startedAfterBuildStart);
+        const subDeps = depth < 1 && chunk.subDependencies
+          ? prepareChunks(chunk.subDependencies, depth + 1)
+          : [];
+        return {
+          chunkName: chunk.chunkName,
+          pct: toPct(buildStart + deltaMs),
+          deltaLabel: formatDeltaShort(deltaMs),
+          startPct: startMs != null ? toPct(buildStart + startMs) : undefined,
+          subDeps,
+        };
+      })
+      .filter(Boolean) as PreparedChunk[];
+  }
+
+  const chunks = prepareChunks(testpass.dependentChunks ?? [], 0);
 
   // Sort chunks by availability time
   chunks.sort((a, b) => a.pct - b.pct);
@@ -420,9 +494,120 @@ export default function MiniGanttChart({
           >
             Dependencies
           </div>
-          {chunks.map((c, i) => (
-            <ChunkRow key={i} chunkName={c.chunkName} pct={c.pct} deltaLabel={c.deltaLabel} />
-          ))}
+          {(() => {
+            // Build flat list of rows with row indices for connector lines
+            const flatRows: {
+              chunk: PreparedChunk;
+              parentStartPct?: number;
+              indent: number;
+              prefix: string;
+              barColor: string;
+              barBorder: string;
+              labelFontSize: number;
+              rowIndex: number;
+            }[] = [];
+            let rowIdx = 0;
+            for (const c of chunks) {
+              const parentRow = rowIdx;
+              flatRows.push({
+                chunk: c,
+                indent: 0,
+                prefix: "",
+                barColor: "#b4d6fa",
+                barBorder: "#0078d4",
+                labelFontSize: 12,
+                rowIndex: rowIdx++,
+              });
+              for (let si = 0; si < c.subDeps.length; si++) {
+                const isLast = si === c.subDeps.length - 1;
+                flatRows.push({
+                  chunk: c.subDeps[si],
+                  parentStartPct: c.startPct,
+                  indent: 12,
+                  prefix: isLast ? "└ " : "├ ",
+                  barColor: "#dce8f5",
+                  barBorder: "#a0b4c8",
+                  labelFontSize: 10,
+                  rowIndex: rowIdx++,
+                });
+              }
+            }
+            // Identify connector lines: sub-dep diamond → parent start
+            const connectors: { fromPct: number; toPct: number; fromRow: number; toRow: number }[] = [];
+            let ri = 0;
+            for (const c of chunks) {
+              const parentRowIdx = ri;
+              ri++;
+              if (c.startPct != null) {
+                for (const sub of c.subDeps) {
+                  connectors.push({
+                    fromPct: sub.pct,
+                    toPct: c.startPct,
+                    fromRow: ri,
+                    toRow: parentRowIdx,
+                  });
+                  ri++;
+                }
+              } else {
+                ri += c.subDeps.length;
+              }
+            }
+            const totalRows = rowIdx;
+
+            return (
+              <div style={{ position: "relative" }}>
+                {flatRows.map((r, i) => (
+                  <ChunkRow
+                    key={i}
+                    chunkName={r.chunk.chunkName}
+                    pct={r.chunk.pct}
+                    deltaLabel={r.chunk.deltaLabel}
+                    startPct={r.chunk.startPct}
+                    barColor={r.barColor}
+                    barBorder={r.barBorder}
+                    indent={r.indent}
+                    labelFontSize={r.labelFontSize}
+                    prefix={r.prefix}
+                  />
+                ))}
+                {/* SVG overlay for connector lines */}
+                {connectors.length > 0 && (
+                  <svg
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: `${LABEL_WIDTH}px`,
+                      width: `calc(100% - ${LABEL_WIDTH}px)`,
+                      height: `${totalRows * ROW_HEIGHT}px`,
+                      pointerEvents: "none",
+                      overflow: "visible",
+                    }}
+                  >
+                    {connectors.map((conn, ci) => {
+                      // Sub-dep diamond Y center → parent start Y center
+                      const fromY = conn.fromRow * ROW_HEIGHT + ROW_HEIGHT / 2;
+                      const toY = conn.toRow * ROW_HEIGHT + ROW_HEIGHT / 2;
+                      // X positions as percentages of track width
+                      const fromXPct = conn.fromPct;
+                      const toXPct = conn.toPct;
+                      return (
+                        <line
+                          key={ci}
+                          x1={`${fromXPct}%`}
+                          y1={fromY}
+                          x2={`${toXPct}%`}
+                          y2={toY}
+                          stroke="#c8d6e5"
+                          strokeWidth="1"
+                          strokeDasharray="3 3"
+                        />
+                      );
+                    })}
+                  </svg>
+                )}
+              </div>
+            );
+          })()}
           {/* Divider between chunks and runs */}
           <div style={{ height: "1px", background: "#dedede", margin: "2px 0" }} />
         </>

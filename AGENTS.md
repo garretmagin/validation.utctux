@@ -102,4 +102,4 @@ NuGet feeds: nuget.org + Microsoft `validation.ctproto` (see `nuget.config`).
 
 ## Agent Workflow
 
-- **Do not commit or stage changes.** Present a summary of changes, but let the user review, stage, and commit manually.
+- **NEVER run `git add`, `git stage`, `git commit`, or any git command that modifies the index or history.** Do not stage files. Do not commit. The user will review all changes, stage them, and commit manually. Your only job is to edit files and present a summary of what changed.

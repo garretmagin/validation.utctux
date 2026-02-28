@@ -63,6 +63,7 @@ public class BuildTimingTests(ITestOutputHelper output)
             authService,
             cloudTestService,
             novaService,
+            new MediaCreationService(authService, loggerFactory.CreateLogger<MediaCreationService>()),
             loggerFactory.CreateLogger<TestDataService>());
     }
 

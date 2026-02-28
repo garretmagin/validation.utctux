@@ -19,17 +19,20 @@ public class TestDataService
     private readonly AuthService _authService;
     private readonly CloudTestService _cloudTestService;
     private readonly NovaService _novaService;
+    private readonly MediaCreationService _mediaCreationService;
     private readonly ILogger<TestDataService> _logger;
 
     public TestDataService(
         AuthService authService,
         CloudTestService cloudTestService,
         NovaService novaService,
+        MediaCreationService mediaCreationService,
         ILogger<TestDataService> logger)
     {
         _authService = authService;
         _cloudTestService = cloudTestService;
         _novaService = novaService;
+        _mediaCreationService = mediaCreationService;
         _logger = logger;
     }
 
@@ -46,7 +49,7 @@ public class TestDataService
         progress?.Report("Resolving build identity...");
         _logger.LogInformation("Resolving build identity for FQBN: {Fqbn}", fqbn);
 
-        var (organizationName, projectId, buildId, buildStartTime, restartTimes) = await ResolveBuildIdentityAsync(fqbn, progress);
+        var (organizationName, projectId, buildId, buildStartTime, restartTimes, buildGuid) = await ResolveBuildIdentityAsync(fqbn, progress);
 
         if (organizationName is null || !projectId.HasValue || !buildId.HasValue)
         {
@@ -71,11 +74,16 @@ public class TestDataService
             ? LoadNovaTestReportAsync(parsedFqbn, progress)
             : Task.FromResult<List<NovaTestpass>>([]);
 
-        await Task.WhenAll(summaryTask, cloudTestTask, novaTask).ConfigureAwait(false);
+        var mediaGraphTask = buildGuid.HasValue
+            ? LoadMediaCreationGraphAsync(buildGuid.Value, progress)
+            : Task.FromResult<FullRequestGraph?>(null);
+
+        await Task.WhenAll(summaryTask, cloudTestTask, novaTask, mediaGraphTask).ConfigureAwait(false);
 
         var summaryList = summaryTask.Result;
         var cloudTestData = cloudTestTask.Result;
         var novaData = novaTask.Result;
+        var mediaGraph = await mediaGraphTask;
 
         _logger.LogInformation(
             "Loaded {UtctCount} UTCT testpasses, {CtCount} CloudTest sessions, {NovaCount} Nova testpasses",
@@ -93,6 +101,10 @@ public class TestDataService
         progress?.Report("Aggregating test results...");
         var results = AggregateResults(summaryList, cloudTestData, novaData, chunkLookup);
 
+        // Phase 3.5: Enrich chunks with media creation graph data
+        EnrichChunksWithMediaGraph(results, mediaGraph, buildStartTime);
+        progress?.Report("Enriched chunk dependencies with media creation graph data.");
+
         // Phase 4: Resolve rerun data
         progress?.Report("Resolving rerun data...");
         await BuildRunsListAsync(results, utctClient, cloudTestData);
@@ -101,7 +113,7 @@ public class TestDataService
         return (results, buildStartTime, restartTimes);
     }
 
-    private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? BuildStartTime, IReadOnlyList<DateTimeOffset> RestartTimes)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)
+    private async Task<(string? OrgName, Guid? ProjectId, int? BuildId, DateTimeOffset? BuildStartTime, IReadOnlyList<DateTimeOffset> RestartTimes, Guid? BuildGuid)> ResolveBuildIdentityAsync(string fqbn, IProgress<string>? progress = null)
     {
         try
         {
@@ -117,7 +129,7 @@ public class TestDataService
 
             if (build?.Document?.Properties?.Attributes is null)
             {
-                return (null, null, null, null, []);
+                return (null, null, null, null, [], null);
             }
 
             var attrs = build.Document.Properties.Attributes;
@@ -128,7 +140,7 @@ public class TestDataService
             if (!adoBuildId.HasValue || !adoProjectGuid.HasValue || string.IsNullOrEmpty(adoOrg))
             {
                 _logger.LogWarning("Build found but missing ADO info for FQBN: {Fqbn}", fqbn);
-                return (null, null, null, null, []);
+                return (null, null, null, null, [], null);
             }
 
             // Parse the ADO org URI to extract org name
@@ -172,13 +184,25 @@ public class TestDataService
                 _logger.LogWarning("Could not parse revision timestamp for FQBN {Fqbn}, falling back to ServerCreated: {StartTime}", fqbn, buildStartTime);
             }
 
-            return (orgName, adoProjectGuid.Value, adoBuildId.Value, buildStartTime, restartTimes);
+            // Extract BuildGuid from the Definition (a Dictionary-backed object).
+            // BuildGuid is a computed property that throws if the key is missing.
+            Guid? buildGuid = null;
+            try
+            {
+                buildGuid = build.Document.Properties.Definition?.BuildGuid;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not extract BuildGuid from Discover response for FQBN: {Fqbn}", fqbn);
+            }
+
+            return (orgName, adoProjectGuid.Value, adoBuildId.Value, buildStartTime, restartTimes, buildGuid);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to resolve build identity for FQBN: {Fqbn}", fqbn);
             progress?.Report($"⚠ Error resolving build identity: {ex.Message}");
-            return (null, null, null, null, []);
+            return (null, null, null, null, [], null);
         }
     }
 
@@ -802,5 +826,154 @@ public class TestDataService
         }
 
         return new AggregatedTestpassResult();
+    }
+
+    private async Task<FullRequestGraph?> LoadMediaCreationGraphAsync(Guid buildGuid, IProgress<string>? progress = null)
+    {
+        try
+        {
+            progress?.Report("Loading media creation request graph...");
+            var graph = await _mediaCreationService.GetRequestGraphForBuildAsync(buildGuid);
+            if (graph is not null)
+            {
+                var buildableCount = graph.BuildableArtifacts?.Count ?? 0;
+                var externalCount = graph.ExternalArtifacts?.Count ?? 0;
+                progress?.Report($"Loaded media creation graph: {buildableCount} buildable, {externalCount} external artifacts.");
+            }
+            else
+            {
+                progress?.Report("No media creation graph available for this build.");
+            }
+            return graph;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load media creation graph for build GUID {BuildGuid}", buildGuid);
+            progress?.Report($"⚠ Error loading media creation graph: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void EnrichChunksWithMediaGraph(
+        List<AggregatedTestpassResult> results,
+        FullRequestGraph? mediaGraph,
+        DateTimeOffset? buildStartTime)
+    {
+        if (mediaGraph is null) return;
+
+        // Build lookup: all artifacts by (name, flavor) → artifact, case-insensitive
+        var allArtifacts = new Dictionary<(string Name, string Flavor), MediaCreationArtifact>(
+            new NameFlavorComparer());
+
+        // Also build lookup by artifact ID for dependency resolution
+        var artifactsById = new Dictionary<string, MediaCreationArtifact>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var artifact in mediaGraph.BuildableArtifacts ?? [])
+        {
+            var key = (artifact.Name, artifact.Flavor ?? "");
+            allArtifacts.TryAdd(key, artifact);
+            artifactsById.TryAdd(artifact.Id, artifact);
+        }
+        foreach (var artifact in mediaGraph.ExternalArtifacts ?? [])
+        {
+            var key = (artifact.Name, artifact.Flavor ?? "");
+            allArtifacts.TryAdd(key, artifact);
+            artifactsById.TryAdd(artifact.Id, artifact);
+        }
+
+        var dependsOn = mediaGraph.DependsOnRelations ?? new();
+
+        foreach (var result in results)
+        {
+            if (result.ChunkAvailability is null or { Count: 0 }) continue;
+
+            var enrichedChunks = new List<ChunkAvailabilityInfo>();
+            foreach (var chunk in result.ChunkAvailability)
+            {
+                var key = (chunk.ChunkName, chunk.Flavor ?? "");
+                if (allArtifacts.TryGetValue(key, out var matchedArtifact))
+                {
+                    // Get production start time
+                    var startedAt = matchedArtifact.ArtifactExecutionInfo?.StartTimeUtc;
+                    var startedDelta = (startedAt.HasValue && buildStartTime.HasValue)
+                        ? startedAt.Value - buildStartTime.Value
+                        : (TimeSpan?)null;
+
+                    // Resolve sub-dependencies (full transitive closure)
+                    var subDeps = ResolveSubDependencies(
+                        matchedArtifact.Id, dependsOn, artifactsById, buildStartTime, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+                    enrichedChunks.Add(chunk with
+                    {
+                        StartedAt = startedAt,
+                        StartedAfterBuildStart = startedDelta,
+                        SubDependencies = subDeps.Count > 0 ? subDeps : null,
+                    });
+                }
+                else
+                {
+                    enrichedChunks.Add(chunk);
+                }
+            }
+            result.ChunkAvailability = enrichedChunks;
+        }
+    }
+
+    private List<ChunkAvailabilityInfo> ResolveSubDependencies(
+        string artifactId,
+        Dictionary<string, IReadOnlyList<string>> dependsOn,
+        Dictionary<string, MediaCreationArtifact> artifactsById,
+        DateTimeOffset? buildStartTime,
+        HashSet<string> visited)
+    {
+        var result = new List<ChunkAvailabilityInfo>();
+
+        if (!dependsOn.TryGetValue(artifactId, out var depIds))
+            return result;
+
+        foreach (var depId in depIds)
+        {
+            if (!visited.Add(depId)) continue; // Circular dependency protection
+
+            if (!artifactsById.TryGetValue(depId, out var depArtifact))
+                continue;
+
+            var availableAt = depArtifact.ArtifactExecutionInfo?.EndTimeUtc;
+            var availableDelta = (availableAt.HasValue && buildStartTime.HasValue)
+                ? availableAt.Value - buildStartTime.Value
+                : (TimeSpan?)null;
+
+            var startedAt = depArtifact.ArtifactExecutionInfo?.StartTimeUtc;
+            var startedDelta = (startedAt.HasValue && buildStartTime.HasValue)
+                ? startedAt.Value - buildStartTime.Value
+                : (TimeSpan?)null;
+
+            // Recurse for sub-sub-dependencies
+            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, visited);
+
+            result.Add(new ChunkAvailabilityInfo(
+                depArtifact.Name,
+                depArtifact.Flavor ?? "",
+                availableDelta,
+                availableAt,
+                startedDelta,
+                startedAt,
+                subSubDeps.Count > 0 ? subSubDeps : null));
+        }
+
+        return result;
+    }
+
+    /// <summary>Case-insensitive comparer for (Name, Flavor) tuples.</summary>
+    private sealed class NameFlavorComparer : IEqualityComparer<(string Name, string Flavor)>
+    {
+        public bool Equals((string Name, string Flavor) x, (string Name, string Flavor) y) =>
+            string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.Flavor, y.Flavor, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Name, string Flavor) obj) =>
+            HashCode.Combine(
+                obj.Name.ToUpperInvariant(),
+                obj.Flavor.ToUpperInvariant());
     }
 }

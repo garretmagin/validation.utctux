@@ -26,6 +26,9 @@ export interface ChunkAvailabilityDto {
   flavor: string;
   availableAfterBuildStart: string | null;
   availableAt: string | null;
+  startedAfterBuildStart: string | null;
+  startedAt: string | null;
+  subDependencies: ChunkAvailabilityDto[] | null;
 }
 
 export interface TestpassDto {

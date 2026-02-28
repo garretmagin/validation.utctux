@@ -83,6 +83,43 @@ function formatDateTime(value: string | null): string {
   }
 }
 
+function renderDependencyRows(
+  chunks: ChunkAvailabilityDto[],
+  depth: number = 0,
+  maxDepth: number = 3
+): React.ReactNode[] {
+  const rows: React.ReactNode[] = [];
+  chunks.forEach((chunk, i) => {
+    const isLast = i === chunks.length - 1;
+    const prefix = depth > 0 ? (isLast ? "└ " : "├ ") : "";
+    const indent = depth * 16;
+    const delta = formatDelta(chunk.availableAfterBuildStart);
+    const textColor = depth > 0 ? "#666" : undefined;
+
+    rows.push(
+      <tr key={`${depth}-${i}`} style={{ color: textColor }}>
+        <td style={{ ...tdStyle, paddingLeft: `${8 + indent}px` }}>
+          {prefix && (
+            <span style={{ fontFamily: "monospace", color: "#999" }}>{prefix}</span>
+          )}
+          {chunk.chunkName}
+        </td>
+        <td style={tdStyle}>{chunk.flavor || "—"}</td>
+        <td style={tdStyle}>{formatDateTime(chunk.startedAt)}</td>
+        <td style={tdStyle}>{formatDateTime(chunk.availableAt)}</td>
+        <td style={tdStyle}>
+          <span style={{ color: delta.color }}>{delta.text}</span>
+        </td>
+      </tr>
+    );
+
+    if (chunk.subDependencies && chunk.subDependencies.length > 0 && depth < maxDepth) {
+      rows.push(...renderDependencyRows(chunk.subDependencies, depth + 1, maxDepth));
+    }
+  });
+  return rows;
+}
+
 function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
   if (!chunks || chunks.length === 0) {
     return (
@@ -102,26 +139,13 @@ function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
           <tr>
             <th style={thStyle}>Chunk Name</th>
             <th style={thStyle}>Flavor</th>
+            <th style={thStyle}>Started At</th>
             <th style={thStyle}>Delivered At</th>
             <th style={thStyle}>Available After Build Start</th>
           </tr>
         </thead>
         <tbody>
-          {chunks.map((chunk, i) => {
-            const delta = formatDelta(chunk.availableAfterBuildStart);
-            return (
-              <tr key={i}>
-                <td style={tdStyle}>{chunk.chunkName}</td>
-                <td style={tdStyle}>{chunk.flavor || "—"}</td>
-                <td style={tdStyle}>
-                  {formatDateTime(chunk.availableAt)}
-                </td>
-                <td style={tdStyle}>
-                  <span style={{ color: delta.color }}>{delta.text}</span>
-                </td>
-              </tr>
-            );
-          })}
+          {renderDependencyRows(chunks)}
         </tbody>
       </table>
     </div>

@@ -26,6 +26,9 @@ public class AuthService
 
     public const string AzureDevOpsScope = "499b84ac-1321-427f-aa17-267ca6975798/.default";
 
+    public const string MediaCreationScope = "https://mediacreation.mspmecloud.onmicrosoft.com/MediaCreation-thanos-MediaApi/.default";
+    public const string MediaCreationBaseAddress = "https://mediacreation-media.microsoft.com";
+
     private static readonly string AuthRecordPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "utctux-auth-record.json");
@@ -89,6 +92,22 @@ public class AuthService
     /// </summary>
     public T GetNovaApi<T>() where T : class =>
         RestService.For<T>(GetNovaHttpClient());
+
+    /// <summary>
+    /// Gets an authenticated <see cref="HttpClient"/> for the Media Creation API.
+    /// </summary>
+    public HttpClient GetMediaCreationHttpClient()
+    {
+        var client = CreateAuthenticatedHttpClient(MediaCreationScope);
+        client.BaseAddress = new Uri(MediaCreationBaseAddress);
+        return client;
+    }
+
+    /// <summary>
+    /// Gets an authenticated Refit client for the Media Creation API.
+    /// </summary>
+    public T GetMediaCreationApi<T>() where T : class =>
+        RestService.For<T>(GetMediaCreationHttpClient());
 
     /// <summary>
     /// Gets an authenticated <see cref="HttpClient"/> for the GitBranch API.

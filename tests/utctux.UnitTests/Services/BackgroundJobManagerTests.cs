@@ -26,11 +26,13 @@ public class BackgroundJobManagerTests
             Microsoft.Extensions.Options.Options.Create(new UtctAuthOptions()));
         var cloudTestServiceMock = new Mock<CloudTestService>(authServiceMock.Object);
         var novaServiceMock = new Mock<NovaService>(authServiceMock.Object, NullLogger<NovaService>.Instance);
+        var mediaCreationServiceMock = new Mock<MediaCreationService>(authServiceMock.Object, NullLogger<MediaCreationService>.Instance);
 
         _testDataServiceMock = new Mock<TestDataService>(
             authServiceMock.Object,
             cloudTestServiceMock.Object,
             novaServiceMock.Object,
+            mediaCreationServiceMock.Object,
             NullLogger<TestDataService>.Instance);
 
         _cache = new TestResultsCache(new MemoryCache(new MemoryCacheOptions()));

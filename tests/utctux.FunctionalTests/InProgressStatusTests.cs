@@ -42,10 +42,15 @@ public class InProgressStatusTests(ITestOutputHelper output)
 
         var cloudTestService = new CloudTestService(authService);
 
+        var mediaCreationService = new MediaCreationService(
+            authService,
+            loggerFactory.CreateLogger<MediaCreationService>());
+
         return new TestDataService(
             authService,
             cloudTestService,
             novaService,
+            mediaCreationService,
             loggerFactory.CreateLogger<TestDataService>());
     }
 
@@ -255,5 +260,115 @@ public class InProgressStatusTests(ITestOutputHelper output)
         Assert.Equal("WaitingForDependencies", testpass.Result);
         Assert.False(timing.IsFailed,
             $"Testpass waiting for dependencies should not be marked as Failed. Status='{timing.Status}', Result='{timing.Result}'");
+    }
+
+    [Fact]
+    public async Task LoadTestResults_CloudTestRunning_IsNotReportedAsFailed()
+    {
+        // Arrange — a CloudTest testpass that is currently running.
+        // It should show as running/InProgress, not Failed.
+        const string fqbn = "26575.1000.ge_current_directes.260227-1557";
+        const string testpassName = "TestMD Pester Execution Verification [OneCoreUAP-amd64-VM]";
+
+        var svc = CreateTestDataService();
+        var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
+
+        // Act
+        var (results, _, _) = await svc.LoadTestResultsAsync(fqbn, progress);
+
+        // Assert — find the specific testpass
+        var testpass = results.FirstOrDefault(r =>
+            r.TestpassSummary?.TestpassName == testpassName);
+
+        Assert.NotNull(testpass);
+        output.WriteLine($"Testpass: {testpass.TestpassSummary?.TestpassName}");
+        output.WriteLine($"ExecutionSystem: {testpass.TestpassSummary?.ExecutionSystem}");
+        output.WriteLine($"Status: {testpass.Status}");
+        output.WriteLine($"Result: {testpass.Result}");
+        output.WriteLine($"NovaTestpass: {(testpass.NovaTestpass is null ? "null" : "present")}");
+        output.WriteLine($"TestSession: {(testpass.TestSession is null ? "null" : "present")}");
+
+        if (testpass.TestSession is { } session)
+        {
+            output.WriteLine($"  TestSession.Status: {session.Status}");
+            output.WriteLine($"  TestSession.Result: {session.Result}");
+        }
+
+        output.WriteLine($"ChunkAvailability count: {testpass.ChunkAvailability.Count}");
+
+        var timing = new TestpassTimingData(testpass);
+        output.WriteLine($"TimingData.Status: {timing.Status}");
+        output.WriteLine($"TimingData.Result: {timing.Result}");
+        output.WriteLine($"TimingData.IsRunning: {timing.IsRunning}");
+        output.WriteLine($"TimingData.IsFailed: {timing.IsFailed}");
+        output.WriteLine($"TimingData.IsPassed: {timing.IsPassed}");
+
+        // This is a CloudTest testpass
+        Assert.Equal(ExecutionSystem.CloudTest, testpass.TestpassSummary!.ExecutionSystem);
+
+        // A CloudTest session should exist and be running
+        Assert.NotNull(testpass.TestSession);
+
+        // The testpass should be reported as running, not failed
+        Assert.True(timing.IsRunning,
+            $"Expected testpass to be running, but Status was '{timing.Status}'");
+        Assert.False(timing.IsFailed,
+            $"Running CloudTest testpass should not be marked as Failed. Status='{timing.Status}', Result='{timing.Result}'");
+        Assert.Equal("InProgress", testpass.Result);
+    }
+
+    [Fact]
+    public async Task LoadTestResults_T3RunningTestpass_IsNotReportedAsFailed()
+    {
+        // Arrange — a T3 testpass that is currently running (Nova reports "Running" status).
+        // It should show as InProgress, not Failed.
+        const string fqbn = "26575.1000.ge_current_directes.260227-1557";
+        const string runningTestpassName = "TestMD Driver Verifier Plugin Verification [Win2-amd64-VM]";
+
+        var svc = CreateTestDataService();
+        var progress = new Progress<string>(msg => output.WriteLine($"[Progress] {msg}"));
+
+        // Act
+        var (results, _, _) = await svc.LoadTestResultsAsync(fqbn, progress);
+
+        // Assert — find the specific testpass
+        var testpass = results.FirstOrDefault(r =>
+            r.TestpassSummary?.TestpassName == runningTestpassName);
+
+        Assert.NotNull(testpass);
+        output.WriteLine($"Testpass: {testpass.TestpassSummary?.TestpassName}");
+        output.WriteLine($"ExecutionSystem: {testpass.TestpassSummary?.ExecutionSystem}");
+        output.WriteLine($"Status: {testpass.Status}");
+        output.WriteLine($"Result: {testpass.Result}");
+
+        if (testpass.NovaTestpass is { } nova)
+        {
+            output.WriteLine($"Nova StatusName: {nova.StatusName}");
+            output.WriteLine($"Nova PassRate: {nova.PassRate}");
+            output.WriteLine($"Nova ExecutionRate: {nova.ExecutionRate}");
+            output.WriteLine($"Nova StartTime: {nova.StartTime}");
+            output.WriteLine($"Nova EndTime: {nova.EndTime}");
+        }
+        else
+        {
+            output.WriteLine($"NovaTestpass: null");
+        }
+
+        output.WriteLine($"TestSession: {(testpass.TestSession is null ? "null" : "present")}");
+        output.WriteLine($"ChunkAvailability count: {testpass.ChunkAvailability.Count}");
+
+        var timing = new TestpassTimingData(testpass);
+        output.WriteLine($"TimingData.Status: {timing.Status}");
+        output.WriteLine($"TimingData.Result: {timing.Result}");
+        output.WriteLine($"TimingData.IsRunning: {timing.IsRunning}");
+        output.WriteLine($"TimingData.IsFailed: {timing.IsFailed}");
+        output.WriteLine($"TimingData.IsPassed: {timing.IsPassed}");
+
+        // The testpass should be reported as running/InProgress, not Failed
+        Assert.True(timing.IsRunning,
+            $"Expected testpass to be running, but Status was '{timing.Status}'");
+        Assert.False(timing.IsFailed,
+            $"In-progress T3 testpass should not be marked as Failed. Status='{timing.Status}', Result='{timing.Result}'");
+        Assert.Equal("InProgress", testpass.Result);
     }
 }

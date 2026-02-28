@@ -14,18 +14,21 @@ public class TestDataServiceTests
     private static TestDataService CreateService(
         Mock<AuthService>? authMock = null,
         Mock<CloudTestService>? cloudTestMock = null,
-        Mock<NovaService>? novaMock = null)
+        Mock<NovaService>? novaMock = null,
+        Mock<MediaCreationService>? mediaCreationMock = null)
     {
         authMock ??= new Mock<AuthService>(
             NullLogger<AuthService>.Instance,
             Microsoft.Extensions.Options.Options.Create(new UtctAuthOptions()));
         cloudTestMock ??= new Mock<CloudTestService>(authMock.Object);
         novaMock ??= new Mock<NovaService>(authMock.Object, NullLogger<NovaService>.Instance);
+        mediaCreationMock ??= new Mock<MediaCreationService>(authMock.Object, NullLogger<MediaCreationService>.Instance);
 
         return new TestDataService(
             authMock.Object,
             cloudTestMock.Object,
             novaMock.Object,
+            mediaCreationMock.Object,
             NullLogger<TestDataService>.Instance);
     }
 

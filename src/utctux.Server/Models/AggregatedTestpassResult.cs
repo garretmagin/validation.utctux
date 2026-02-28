@@ -202,6 +202,11 @@ public class AggregatedTestpassResult
                 {
                     return "WaitingForDependencies";
                 }
+                // When session is still running, report InProgress instead of raw Result ("Unknown")
+                if (IsInProgressStatus(TestSession?.Status))
+                {
+                    return "InProgress";
+                }
                 var ctResult = TestSession?.Result ?? "Unknown";
                 // CloudTest "FailedNonFatal" is still a failure — normalize to "Failed"
                 return string.Equals(ctResult, "FailedNonFatal", StringComparison.OrdinalIgnoreCase)

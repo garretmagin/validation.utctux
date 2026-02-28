@@ -396,6 +396,18 @@ public class AggregatedTestpassResultTests
     }
 
     [Fact]
+    public void Result_CloudTest_Running_ReturnsInProgress()
+    {
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.CloudTest },
+            TestSession = new CloudTestSession { Status = "Running", Result = "Unknown" },
+        };
+
+        result.Result.ShouldBe("InProgress");
+    }
+
+    [Fact]
     public void Result_Nova_AllPassing_ReturnsPassed()
     {
         var result = new AggregatedTestpassResult

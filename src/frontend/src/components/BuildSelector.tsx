@@ -114,6 +114,15 @@ function ExpandableBadge({
   );
 }
 
+/** Maps short build type codes to full display names for the pill */
+function fullTypeName(type: string): string {
+  switch (type) {
+    case "BXL": return "BUILDXL";
+    case "TB": return "TIMEBUILD";
+    default: return type.toUpperCase();
+  }
+}
+
 function NLabel({ label }: { label: string }) {
   const isLatest = label === "Latest";
   return (
@@ -334,6 +343,17 @@ export default function BuildSelector({
     [onFqbnSelected]
   );
 
+  // Find the currently selected build for type pill display
+  const selectedBuild = useMemo(() => {
+    if (!initialFqbn) return null;
+    for (const b of builds) {
+      if (b.fqbn === initialFqbn) return b;
+      const child = b.relatedBuilds?.find(r => r.fqbn === initialFqbn);
+      if (child) return child;
+    }
+    return null;
+  }, [builds, initialFqbn]);
+
   return (
     <div className="flex-column">
       {error && (
@@ -345,39 +365,56 @@ export default function BuildSelector({
           {error}
         </MessageCard>
       )}
-      <div className="flex-row" style={{ gap: "16px", alignItems: "flex-end" }}>
-        <div className="flex-column">
-          <label className="body-m secondary-text margin-bottom-4">Branch</label>
-          <div className="flex-row flex-center" style={{ gap: "8px", minWidth: "450px" }}>
-            <Dropdown
-              ariaLabel="Select branch"
-              placeholder="Select a branch"
-              items={branchItems}
-              selection={branchSelection}
-              onSelect={onBranchSelect}
-              disabled={loadingBranches}
-              className="flex-grow"
-            />
-            {loadingBranches && <Spinner size={SpinnerSize.small} />}
-          </div>
+      <div className="flex-row flex-center" style={{ gap: "8px", flexWrap: "nowrap" }}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#666", flexShrink: 0 }} title="Branch"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>
+        <div style={{ minWidth: "400px", flex: "0 0 auto" }}>
+          <Dropdown
+            ariaLabel="Select branch"
+            placeholder="Select a branch"
+            items={branchItems}
+            selection={branchSelection}
+            onSelect={onBranchSelect}
+            disabled={loadingBranches}
+            showChecksColumn={false}
+            className="flex-grow"
+          />
         </div>
-        <div className="flex-column">
-          <label className="body-m secondary-text margin-bottom-4">Build</label>
-          <div className="flex-row flex-center" style={{ gap: "8px", minWidth: "600px" }}>
-            <Dropdown
-              ariaLabel="Select build"
-              placeholder={
-                selectedBranch ? "Select a build" : "Select a branch first"
-              }
-              items={buildItems}
-              selection={buildSelection}
-              onSelect={onBuildSelect}
-              disabled={!selectedBranch || loadingBuilds}
-              className="flex-grow"
-            />
-            {loadingBuilds && <Spinner size={SpinnerSize.small} />}
-          </div>
+        {loadingBranches && <Spinner size={SpinnerSize.small} />}
+
+        <span style={{ color: "#ccc", fontSize: "1.2em", padding: "0 4px" }}>/</span>
+
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#666", flexShrink: 0 }} title="Build"><path d="M14 3a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1"/><path d="M19 3a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1"/><path d="m7 15 3 3"/><path d="m7 21 3-3H5a2 2 0 0 1-2-2v-2"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="3" width="7" height="7" rx="1"/></svg>
+        <div style={{ minWidth: "400px", flex: "0 0 auto" }}>
+          <Dropdown
+            ariaLabel="Select build"
+            placeholder={selectedBranch ? "Select a build" : "Select a branch first"}
+            items={buildItems}
+            selection={buildSelection}
+            onSelect={onBuildSelect}
+            disabled={!selectedBranch || loadingBuilds}
+            showChecksColumn={false}
+            className="flex-grow"
+          />
         </div>
+        {loadingBuilds && <Spinner size={SpinnerSize.small} />}
+
+        {selectedBuild?.buildType && (
+          <span
+            style={{
+              display: "inline-block",
+              padding: "2px 10px",
+              borderRadius: "12px",
+              border: "1px solid #bbb",
+              fontSize: "0.75em",
+              fontWeight: 600,
+              color: "#555",
+              letterSpacing: "0.5px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {fullTypeName(selectedBuild.buildType)}
+          </span>
+        )}
       </div>
     </div>
   );

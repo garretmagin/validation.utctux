@@ -491,7 +491,9 @@ public class TestDataService
             }
         }
 
-        return result;
+        return result
+            .OrderBy(c => c.AvailableAfterBuildStart ?? TimeSpan.MaxValue)
+            .ToList();
     }
 
     /// <summary>
@@ -946,7 +948,9 @@ public class TestDataService
                     enrichedChunks.Add(chunk);
                 }
             }
-            result.ChunkAvailability = enrichedChunks;
+            result.ChunkAvailability = enrichedChunks
+                .OrderBy(c => c.AvailableAfterBuildStart ?? TimeSpan.MaxValue)
+                .ToList();
         }
     }
 
@@ -1005,7 +1009,9 @@ public class TestDataService
                 subSubDeps.Count > 0 ? subSubDeps : null));
         }
 
-        return result;
+        return result
+            .OrderBy(c => c.AvailableAfterBuildStart ?? TimeSpan.MaxValue)
+            .ToList();
     }
 
     /// <summary>Case-insensitive comparer for (Name, Flavor) tuples.</summary>

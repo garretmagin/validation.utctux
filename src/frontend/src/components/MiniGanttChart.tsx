@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
+import "./MiniGanttChart.css";
 
 export interface MiniGanttChartProps {
   testpass: TestpassDto;
@@ -298,12 +299,117 @@ function TestpassBar({
   );
 }
 
+// --- Types & helpers for tree rendering ---
+
+interface PreparedChunk {
+  chunkName: string;
+  pct: number;
+  deltaLabel: string;
+  startPct?: number;
+  subDeps: PreparedChunk[];
+  isCriticalPath: boolean;
+}
+
+interface FlatTrack {
+  chunk: PreparedChunk;
+  barColor: string;
+  barBorder: string;
+  depth: number;
+  key: string;
+}
+
+function flattenForTracks(
+  chunks: PreparedChunk[],
+  collapsedNodes: Set<string>,
+  depth: number = 0,
+  pathPrefix: string = "",
+): FlatTrack[] {
+  const result: FlatTrack[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const key = pathPrefix ? `${pathPrefix}-${i}` : `${i}`;
+    result.push({
+      chunk,
+      barColor: chunk.isCriticalPath
+        ? (depth === 0 ? "#f5c6c6" : "#fae0e0")
+        : (depth === 0 ? "#b4d6fa" : "#dce8f5"),
+      barBorder: chunk.isCriticalPath
+        ? (depth === 0 ? "#c44" : "#d08888")
+        : (depth === 0 ? "#0078d4" : "#a0b4c8"),
+      depth,
+      key,
+    });
+    if (chunk.subDeps.length > 0 && !collapsedNodes.has(key)) {
+      result.push(...flattenForTracks(chunk.subDeps, collapsedNodes, depth + 1, key));
+    }
+  }
+  return result;
+}
+
+function ChunkTreeLabels({
+  chunks,
+  collapsedNodes,
+  onToggle,
+  pathPrefix = "",
+}: {
+  chunks: PreparedChunk[];
+  collapsedNodes: Set<string>;
+  onToggle: (key: string) => void;
+  pathPrefix?: string;
+}) {
+  if (chunks.length === 0) return null;
+  return (
+    <ul>
+      {chunks.map((chunk, i) => {
+        const key = pathPrefix ? `${pathPrefix}-${i}` : `${i}`;
+        const hasChildren = chunk.subDeps.length > 0;
+        const isExpanded = !collapsedNodes.has(key);
+        const depth = pathPrefix ? pathPrefix.split("-").length : 0;
+        return (
+          <li key={key} title={chunk.chunkName}>
+            <span className="chunk-label">
+              {hasChildren && (
+                <button
+                  className="tree-toggle"
+                  onClick={(e) => { e.stopPropagation(); onToggle(key); }}
+                  title={isExpanded ? "Collapse" : "Expand"}
+                >
+                  {isExpanded ? "−" : "+"}
+                </button>
+              )}
+              {truncate(chunk.chunkName, 36 - depth * 2)}
+            </span>
+            {isExpanded && hasChildren && (
+              <ChunkTreeLabels
+                chunks={chunk.subDeps}
+                collapsedNodes={collapsedNodes}
+                onToggle={onToggle}
+                pathPrefix={key}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 // --- Main Component ---
 
 export default function MiniGanttChart({
   testpass,
   buildRegistrationDate,
 }: MiniGanttChartProps) {
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+  const toggleNode = useCallback((key: string) => {
+    setCollapsedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const hasChunkData = (testpass.dependentChunks ?? []).some(
     (c) => parseTimeSpanToMs(c.availableAfterBuildStart) != null
   );
@@ -372,14 +478,6 @@ export default function MiniGanttChart({
     Math.max(0, Math.min(100, ((timeMs - buildStart) / totalSpanMs) * 100));
 
   // --- Chunk data ---
-  interface PreparedChunk {
-    chunkName: string;
-    pct: number;
-    deltaLabel: string;
-    startPct?: number;
-    subDeps: PreparedChunk[];
-    isCriticalPath: boolean;
-  }
 
   function prepareChunks(deps: ChunkAvailabilityDto[], depth: number): PreparedChunk[] {
     return deps
@@ -503,143 +601,53 @@ export default function MiniGanttChart({
             Dependencies
           </div>
           {(() => {
-            // Build flat list of rows with row indices for connector lines
-            type FlatRow = {
-              chunk: PreparedChunk;
-              parentStartPct?: number;
-              depth: number;
-              isLast: boolean;
-              parentRowIdx?: number;
-              barColor: string;
-              barBorder: string;
-              labelFontSize: number;
-              rowIndex: number;
-              // Track ancestor depths that need continuing vertical lines
-              activeDepths: number[];
-            };
-            const flatRows: FlatRow[] = [];
-            let rowIdx = 0;
-
-            function flattenChunks(
-              items: PreparedChunk[],
-              depth: number,
-              parentRowIdx?: number,
-              parentStartPct?: number,
-              activeDepths: number[] = [],
-            ) {
-              for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                const isLast = i === items.length - 1;
-                const myRowIdx = rowIdx++;
-                // Active depths for continuing vertical lines: keep parent's, add current depth if not last
-                const childActiveDepths = isLast
-                  ? activeDepths.filter(d => d !== depth)
-                  : [...activeDepths, depth];
-                flatRows.push({
-                  chunk: item,
-                  parentStartPct,
-                  depth,
-                  isLast,
-                  parentRowIdx,
-                  barColor: item.isCriticalPath
-                    ? (depth === 0 ? "#f5c6c6" : "#fae0e0")
-                    : (depth === 0 ? "#b4d6fa" : "#dce8f5"),
-                  barBorder: item.isCriticalPath
-                    ? (depth === 0 ? "#c44" : "#d08888")
-                    : (depth === 0 ? "#0078d4" : "#a0b4c8"),
-                  labelFontSize: depth === 0 ? 12 : 10,
-                  rowIndex: myRowIdx,
-                  activeDepths: [...activeDepths],
-                });
-                // Recurse into sub-deps
-                if (item.subDeps.length > 0) {
-                  flattenChunks(item.subDeps, depth + 1, myRowIdx, item.startPct, childActiveDepths);
-                }
-              }
-            }
-            flattenChunks(chunks, 0);
-            const totalRows = rowIdx;
-
-            const TREE_STEP = 12;
-
-            // Build tree line segments for the label-area SVG overlay
-            const treeLabelLines: React.ReactNode[] = [];
-            flatRows.forEach((r, i) => {
-              if (r.depth <= 0) return;
-              const rowTop = i * ROW_PITCH;
-              const midY = rowTop + ROW_HEIGHT / 2;
-              const x = (r.depth - 1) * TREE_STEP + 1;
-
-              // Horizontal tick from trunk to label
-              treeLabelLines.push(
-                <line key={`h-${i}`} x1={x} y1={midY} x2={r.depth * TREE_STEP} y2={midY}
-                  stroke="#c8d6e5" strokeWidth="1" />
-              );
-
-              // Is this the first child of its parent? (previous row is at a shallower depth)
-              const prevRow = flatRows[i - 1];
-              const isFirstChild = prevRow && prevRow.depth < r.depth;
-
-              // Vertical line: 
-              // - First child: start from parent's midY (extends up into parent row)
-              // - Other children: start from top of this row
-              const vTop = isFirstChild
-                ? (i - 1) * ROW_PITCH + ROW_HEIGHT / 2
-                : rowTop;
-              const vBottom = r.isLast ? midY : rowTop + ROW_PITCH + 1;
-              treeLabelLines.push(
-                <line key={`v-${i}`} x1={x} y1={vTop} x2={x} y2={vBottom}
-                  stroke="#c8d6e5" strokeWidth="1" />
-              );
-
-              // Continuing vertical lines for ancestor depths that still have siblings below
-              for (const ad of r.activeDepths) {
-                if (ad < r.depth) {
-                  const ax = (ad - 1) * TREE_STEP + 1;
-                  treeLabelLines.push(
-                    <line key={`a-${i}-${ad}`} x1={ax} y1={rowTop} x2={ax} y2={rowTop + ROW_PITCH + 1}
-                      stroke="#c8d6e5" strokeWidth="1" />
-                  );
-                }
-              }
-            });
-
+            const visibleTracks = flattenForTracks(chunks, collapsedNodes);
+            const totalRows = visibleTracks.length;
             return (
-              <div style={{ position: "relative" }}>
-                {/* Tree lines SVG overlay in label area */}
-                {treeLabelLines.length > 0 && (
-                  <svg
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: `${LABEL_WIDTH}px`,
-                      height: `${totalRows * ROW_PITCH}px`,
-                      pointerEvents: "none",
-                      zIndex: 1,
-                    }}
-                  >
-                    {treeLabelLines}
-                  </svg>
-                )}
-                {flatRows.map((r, i) => (
-                  <div key={i} style={rowStyle} title={`${r.chunk.chunkName}: ${r.chunk.deltaLabel}`}>
-                    <div style={{ ...labelCellStyle, fontSize: `${r.labelFontSize}px`, paddingLeft: `${r.depth * TREE_STEP + 6}px` }} title={r.chunk.chunkName}>
-                      {truncate(r.chunk.chunkName, 38 - Math.floor(r.depth * 2))}
-                    </div>
-                    <div style={trackCellStyle}>
-                      {r.chunk.startPct != null && r.chunk.startPct < r.chunk.pct ? (
-                        <div style={{ position: "absolute", top: "50%", left: `${r.chunk.startPct}%`, width: `${r.chunk.pct - r.chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: r.barColor, border: `1px solid ${r.barBorder}`, borderRadius: "2px" }} />
+              <div style={{ position: "relative", display: "flex" }}>
+                {/* Label tree panel */}
+                <div
+                  className="mini-gantt-tree"
+                  style={{
+                    width: `${LABEL_WIDTH}px`,
+                    minWidth: `${LABEL_WIDTH}px`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <ChunkTreeLabels
+                    chunks={chunks}
+                    collapsedNodes={collapsedNodes}
+                    onToggle={toggleNode}
+                  />
+                </div>
+                {/* Track bar panel */}
+                <div
+                  style={{
+                    flex: 1,
+                    position: "relative",
+                    height: `${totalRows * ROW_PITCH}px`,
+                    minWidth: 0,
+                  }}
+                >
+                  {visibleTracks.map((t, i) => (
+                    <div
+                      key={t.key}
+                      className="mini-gantt-track-row"
+                      style={{ top: `${i * ROW_PITCH}px`, height: `${ROW_HEIGHT}px` }}
+                      title={`${t.chunk.chunkName}: ${t.chunk.deltaLabel}`}
+                    >
+                      {t.chunk.startPct != null && t.chunk.startPct < t.chunk.pct ? (
+                        <div style={{ position: "absolute", top: "50%", left: `${t.chunk.startPct}%`, width: `${t.chunk.pct - t.chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: t.barColor, border: `1px solid ${t.barBorder}`, borderRadius: "2px" }} />
                       ) : (
-                        <div style={{ position: "absolute", top: "50%", left: 0, width: `calc(${r.chunk.pct}% + 2px)`, height: "1px", background: "#c8d6e5" }} />
+                        <div style={{ position: "absolute", top: "50%", left: 0, width: `calc(${t.chunk.pct}% + 2px)`, height: "1px", background: "#c8d6e5" }} />
                       )}
-                      <div style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, width: "8px", height: "8px", background: r.chunk.isCriticalPath ? "#c44" : "#0078d4", border: `1px solid ${r.chunk.isCriticalPath ? "#a33" : "#106ebe"}`, transform: "translate(-50%, -50%) rotate(45deg)" }} />
-                      <span style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>
-                        {r.chunk.deltaLabel}
+                      <div style={{ position: "absolute", top: "50%", left: `${t.chunk.pct}%`, width: "8px", height: "8px", background: t.chunk.isCriticalPath ? "#c44" : "#0078d4", border: `1px solid ${t.chunk.isCriticalPath ? "#a33" : "#106ebe"}`, transform: "translate(-50%, -50%) rotate(45deg)" }} />
+                      <span style={{ position: "absolute", top: "50%", left: `${t.chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>
+                        {t.chunk.deltaLabel}
                       </span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             );
           })()}

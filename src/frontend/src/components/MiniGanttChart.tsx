@@ -378,6 +378,7 @@ export default function MiniGanttChart({
     deltaLabel: string;
     startPct?: number;
     subDeps: PreparedChunk[];
+    isCriticalPath: boolean;
   }
 
   function prepareChunks(deps: ChunkAvailabilityDto[], depth: number): PreparedChunk[] {
@@ -395,6 +396,7 @@ export default function MiniGanttChart({
           deltaLabel: formatDeltaShort(deltaMs),
           startPct: startMs != null ? toPct(buildStart + startMs) : undefined,
           subDeps,
+          isCriticalPath: chunk.isCriticalPath ?? false,
         };
       })
       .filter(Boolean) as PreparedChunk[];
@@ -539,8 +541,12 @@ export default function MiniGanttChart({
                   depth,
                   isLast,
                   parentRowIdx,
-                  barColor: depth === 0 ? "#b4d6fa" : "#dce8f5",
-                  barBorder: depth === 0 ? "#0078d4" : "#a0b4c8",
+                  barColor: item.isCriticalPath
+                    ? (depth === 0 ? "#f5c6c6" : "#fae0e0")
+                    : (depth === 0 ? "#b4d6fa" : "#dce8f5"),
+                  barBorder: item.isCriticalPath
+                    ? (depth === 0 ? "#c44" : "#d08888")
+                    : (depth === 0 ? "#0078d4" : "#a0b4c8"),
                   labelFontSize: depth === 0 ? 12 : 10,
                   rowIndex: myRowIdx,
                   activeDepths: [...activeDepths],
@@ -627,7 +633,7 @@ export default function MiniGanttChart({
                       ) : (
                         <div style={{ position: "absolute", top: "50%", left: 0, width: `calc(${r.chunk.pct}% + 2px)`, height: "1px", background: "#c8d6e5" }} />
                       )}
-                      <div style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, width: "8px", height: "8px", background: "#0078d4", border: "1px solid #106ebe", transform: "translate(-50%, -50%) rotate(45deg)" }} />
+                      <div style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, width: "8px", height: "8px", background: r.chunk.isCriticalPath ? "#c44" : "#0078d4", border: `1px solid ${r.chunk.isCriticalPath ? "#a33" : "#106ebe"}`, transform: "translate(-50%, -50%) rotate(45deg)" }} />
                       <span style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>
                         {r.chunk.deltaLabel}
                       </span>

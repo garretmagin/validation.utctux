@@ -29,6 +29,7 @@ export interface ChunkAvailabilityDto {
   startedAfterBuildStart: string | null;
   startedAt: string | null;
   subDependencies: ChunkAvailabilityDto[] | null;
+  isCriticalPath: boolean;
 }
 
 export interface TestpassDto {

@@ -11,4 +11,5 @@ public record ChunkAvailabilityInfo(
     DateTimeOffset? AvailableAt = null,
     TimeSpan? StartedAfterBuildStart = null,
     DateTimeOffset? StartedAt = null,
-    IReadOnlyList<ChunkAvailabilityInfo>? SubDependencies = null);
+    IReadOnlyList<ChunkAvailabilityInfo>? SubDependencies = null,
+    bool IsCriticalPath = false);

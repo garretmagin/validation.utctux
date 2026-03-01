@@ -106,6 +106,9 @@ public class TestDataService
         EnrichChunksWithMediaGraph(results, mediaGraph, buildStartTime, chunkLookup);
         progress?.Report("Enriched chunk dependencies with media creation graph data.");
 
+        // Phase 3.6: Mark the critical path through dependencies for each testpass
+        MarkCriticalPaths(results);
+
         // Phase 4: Resolve rerun data
         progress?.Report("Resolving rerun data...");
         await BuildRunsListAsync(results, utctClient, cloudTestData);
@@ -954,6 +957,58 @@ public class TestDataService
         }
     }
 
+    /// <summary>
+    /// Marks the critical path through each testpass's dependency tree.
+    /// The critical path is the chain of chunks where each node is the latest-available
+    /// dependency at its level, forming the bottleneck from build start to testpass readiness.
+    /// </summary>
+    internal static void MarkCriticalPaths(List<AggregatedTestpassResult> results)
+    {
+        foreach (var result in results)
+        {
+            if (result.ChunkAvailability is not { Count: > 0 }) continue;
+            result.ChunkAvailability = MarkCriticalPathInChunks(result.ChunkAvailability);
+        }
+    }
+
+    private static IReadOnlyList<ChunkAvailabilityInfo> MarkCriticalPathInChunks(
+        IReadOnlyList<ChunkAvailabilityInfo> chunks)
+    {
+        if (chunks.Count == 0) return chunks;
+
+        // Find the chunk with the latest availability time — that's the critical one at this level
+        ChunkAvailabilityInfo? criticalChunk = null;
+        TimeSpan maxDelta = TimeSpan.MinValue;
+        foreach (var chunk in chunks)
+        {
+            var delta = chunk.AvailableAfterBuildStart ?? TimeSpan.MinValue;
+            if (delta >= maxDelta)
+            {
+                maxDelta = delta;
+                criticalChunk = chunk;
+            }
+        }
+
+        var result = new List<ChunkAvailabilityInfo>(chunks.Count);
+        foreach (var chunk in chunks)
+        {
+            if (ReferenceEquals(chunk, criticalChunk))
+            {
+                // Mark this chunk and recurse into its sub-dependencies
+                var markedSubDeps = chunk.SubDependencies is { Count: > 0 }
+                    ? MarkCriticalPathInChunks(chunk.SubDependencies)
+                    : chunk.SubDependencies;
+                result.Add(chunk with { IsCriticalPath = true, SubDependencies = markedSubDeps });
+            }
+            else
+            {
+                result.Add(chunk);
+            }
+        }
+
+        return result;
+    }
+
     private List<ChunkAvailabilityInfo> ResolveSubDependencies(
         string artifactId,
         Dictionary<string, IReadOnlyList<string>> dependsOn,
@@ -998,6 +1053,10 @@ public class TestDataService
 
             // Recurse for sub-sub-dependencies
             var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, mediaGraphChunkLookup, visited);
+
+            // Backtrack: remove depId so sibling branches can independently resolve
+            // the same node in their own subtrees (diamond dependencies are valid)
+            visited.Remove(depId);
 
             result.Add(new ChunkAvailabilityInfo(
                 depArtifact.Name,

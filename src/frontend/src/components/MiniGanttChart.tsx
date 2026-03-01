@@ -516,7 +516,6 @@ export default function MiniGanttChart({
               activeDepths: number[];
             };
             const flatRows: FlatRow[] = [];
-            const connectors: { fromPct: number; toPct: number; fromRow: number; toRow: number }[] = [];
             let rowIdx = 0;
 
             function flattenChunks(
@@ -546,15 +545,6 @@ export default function MiniGanttChart({
                   rowIndex: myRowIdx,
                   activeDepths: [...activeDepths],
                 });
-                // Connector from this sub-dep's diamond to parent's start
-                if (parentRowIdx != null && parentStartPct != null) {
-                  connectors.push({
-                    fromPct: item.pct,
-                    toPct: parentStartPct,
-                    fromRow: myRowIdx,
-                    toRow: parentRowIdx,
-                  });
-                }
                 // Recurse into sub-deps
                 if (item.subDeps.length > 0) {
                   flattenChunks(item.subDeps, depth + 1, myRowIdx, item.startPct, childActiveDepths);
@@ -644,44 +634,6 @@ export default function MiniGanttChart({
                     </div>
                   </div>
                 ))}
-                {/* SVG overlay for connector lines */}
-                {connectors.length > 0 && (
-                  <svg
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: `${LABEL_WIDTH}px`,
-                      width: `calc(100% - ${LABEL_WIDTH}px)`,
-                      height: `${totalRows * ROW_PITCH}px`,
-                      pointerEvents: "none",
-                      overflow: "visible",
-                    }}
-                  >
-                    {connectors.map((conn, ci) => {
-                      // Right-angle connector: go right from sub-dep diamond, then up to parent start
-                      const fromY = conn.fromRow * ROW_PITCH + ROW_HEIGHT / 2;
-                      const toY = conn.toRow * ROW_PITCH + ROW_HEIGHT / 2;
-                      const fromXPct = conn.fromPct;
-                      const toXPct = conn.toPct;
-                      return (
-                        <React.Fragment key={ci}>
-                          {/* Horizontal: from sub-dep diamond across to parent's X */}
-                          <line
-                            x1={`${fromXPct}%`} y1={fromY}
-                            x2={`${toXPct}%`} y2={fromY}
-                            stroke="#c8d6e5" strokeWidth="1" strokeDasharray="3 3"
-                          />
-                          {/* Vertical: up to parent row */}
-                          <line
-                            x1={`${toXPct}%`} y1={fromY}
-                            x2={`${toXPct}%`} y2={toY}
-                            stroke="#c8d6e5" strokeWidth="1" strokeDasharray="3 3"
-                          />
-                        </React.Fragment>
-                      );
-                    })}
-                  </svg>
-                )}
               </div>
             );
           })()}

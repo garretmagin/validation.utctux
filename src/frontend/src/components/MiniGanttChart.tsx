@@ -176,7 +176,7 @@ function ChunkRow({
               position: "absolute",
               top: "50%",
               left: 0,
-              width: `${pct}%`,
+              width: `calc(${pct}% + 2px)`,
               height: "1px",
               background: "#c8d6e5",
             }}
@@ -590,7 +590,7 @@ export default function MiniGanttChart({
               const vTop = isFirstChild
                 ? (i - 1) * ROW_PITCH + ROW_HEIGHT / 2
                 : rowTop;
-              const vBottom = r.isLast ? midY : rowTop + ROW_PITCH;
+              const vBottom = r.isLast ? midY : rowTop + ROW_PITCH + 1;
               treeLabelLines.push(
                 <line key={`v-${i}`} x1={x} y1={vTop} x2={x} y2={vBottom}
                   stroke="#c8d6e5" strokeWidth="1" />
@@ -601,7 +601,7 @@ export default function MiniGanttChart({
                 if (ad < r.depth) {
                   const ax = (ad - 1) * TREE_STEP + 1;
                   treeLabelLines.push(
-                    <line key={`a-${i}-${ad}`} x1={ax} y1={rowTop} x2={ax} y2={rowTop + ROW_PITCH}
+                    <line key={`a-${i}-${ad}`} x1={ax} y1={rowTop} x2={ax} y2={rowTop + ROW_PITCH + 1}
                       stroke="#c8d6e5" strokeWidth="1" />
                   );
                 }
@@ -635,7 +635,7 @@ export default function MiniGanttChart({
                       {r.chunk.startPct != null && r.chunk.startPct < r.chunk.pct ? (
                         <div style={{ position: "absolute", top: "50%", left: `${r.chunk.startPct}%`, width: `${r.chunk.pct - r.chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: r.barColor, border: `1px solid ${r.barBorder}`, borderRadius: "2px" }} />
                       ) : (
-                        <div style={{ position: "absolute", top: "50%", left: 0, width: `${r.chunk.pct}%`, height: "1px", background: "#c8d6e5" }} />
+                        <div style={{ position: "absolute", top: "50%", left: 0, width: `calc(${r.chunk.pct}% + 2px)`, height: "1px", background: "#c8d6e5" }} />
                       )}
                       <div style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, width: "8px", height: "8px", background: "#0078d4", border: "1px solid #106ebe", transform: "translate(-50%, -50%) rotate(45deg)" }} />
                       <span style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>

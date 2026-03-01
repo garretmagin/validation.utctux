@@ -9,7 +9,9 @@ export interface MiniGanttChartProps {
 // --- Helpers ---
 
 const ROW_HEIGHT = 24;
-const LABEL_WIDTH = 240;
+// box-sizing: border-box is active globally, so border is inside ROW_HEIGHT
+const ROW_PITCH = ROW_HEIGHT;
+const LABEL_WIDTH = 260;
 
 function formatTickTime(seconds: number): string {
   const hrs = Math.floor(seconds / 3600);
@@ -95,6 +97,7 @@ const rowStyle: React.CSSProperties = {
 const labelCellStyle: React.CSSProperties = {
   width: `${LABEL_WIDTH}px`,
   minWidth: `${LABEL_WIDTH}px`,
+  paddingLeft: "6px",
   paddingRight: "8px",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -145,7 +148,10 @@ function ChunkRow({
         }}
         title={chunkName}
       >
-        {prefix}{truncate(chunkName, 40 - prefix.length - Math.floor(indent / 6))}
+        {prefix && (
+          <span style={{ fontFamily: "monospace", color: "#c8d6e5", fontSize: "11px" }}>{prefix}</span>
+        )}
+        {truncate(chunkName, 40 - Math.floor(indent / 6))}
       </div>
       <div style={trackCellStyle}>
         {hasSpan ? (
@@ -499,12 +505,15 @@ export default function MiniGanttChart({
             type FlatRow = {
               chunk: PreparedChunk;
               parentStartPct?: number;
-              indent: number;
-              prefix: string;
+              depth: number;
+              isLast: boolean;
+              parentRowIdx?: number;
               barColor: string;
               barBorder: string;
               labelFontSize: number;
               rowIndex: number;
+              // Track ancestor depths that need continuing vertical lines
+              activeDepths: number[];
             };
             const flatRows: FlatRow[] = [];
             const connectors: { fromPct: number; toPct: number; fromRow: number; toRow: number }[] = [];
@@ -515,20 +524,27 @@ export default function MiniGanttChart({
               depth: number,
               parentRowIdx?: number,
               parentStartPct?: number,
+              activeDepths: number[] = [],
             ) {
               for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const isLast = i === items.length - 1;
                 const myRowIdx = rowIdx++;
+                // Active depths for continuing vertical lines: keep parent's, add current depth if not last
+                const childActiveDepths = isLast
+                  ? activeDepths.filter(d => d !== depth)
+                  : [...activeDepths, depth];
                 flatRows.push({
                   chunk: item,
                   parentStartPct,
-                  indent: depth * 12,
-                  prefix: depth > 0 ? (isLast ? "└ " : "├ ") : "",
+                  depth,
+                  isLast,
+                  parentRowIdx,
                   barColor: depth === 0 ? "#b4d6fa" : "#dce8f5",
                   barBorder: depth === 0 ? "#0078d4" : "#a0b4c8",
                   labelFontSize: depth === 0 ? 12 : 10,
                   rowIndex: myRowIdx,
+                  activeDepths: [...activeDepths],
                 });
                 // Connector from this sub-dep's diamond to parent's start
                 if (parentRowIdx != null && parentStartPct != null) {
@@ -541,28 +557,92 @@ export default function MiniGanttChart({
                 }
                 // Recurse into sub-deps
                 if (item.subDeps.length > 0) {
-                  flattenChunks(item.subDeps, depth + 1, myRowIdx, item.startPct);
+                  flattenChunks(item.subDeps, depth + 1, myRowIdx, item.startPct, childActiveDepths);
                 }
               }
             }
             flattenChunks(chunks, 0);
             const totalRows = rowIdx;
 
+            const TREE_STEP = 12;
+
+            // Build tree line segments for the label-area SVG overlay
+            const treeLabelLines: React.ReactNode[] = [];
+            flatRows.forEach((r, i) => {
+              if (r.depth <= 0) return;
+              const rowTop = i * ROW_PITCH;
+              const midY = rowTop + ROW_HEIGHT / 2;
+              const x = (r.depth - 1) * TREE_STEP + 1;
+
+              // Horizontal tick from trunk to label
+              treeLabelLines.push(
+                <line key={`h-${i}`} x1={x} y1={midY} x2={r.depth * TREE_STEP} y2={midY}
+                  stroke="#c8d6e5" strokeWidth="1" />
+              );
+
+              // Is this the first child of its parent? (previous row is at a shallower depth)
+              const prevRow = flatRows[i - 1];
+              const isFirstChild = prevRow && prevRow.depth < r.depth;
+
+              // Vertical line: 
+              // - First child: start from parent's midY (extends up into parent row)
+              // - Other children: start from top of this row
+              const vTop = isFirstChild
+                ? (i - 1) * ROW_PITCH + ROW_HEIGHT / 2
+                : rowTop;
+              const vBottom = r.isLast ? midY : rowTop + ROW_PITCH;
+              treeLabelLines.push(
+                <line key={`v-${i}`} x1={x} y1={vTop} x2={x} y2={vBottom}
+                  stroke="#c8d6e5" strokeWidth="1" />
+              );
+
+              // Continuing vertical lines for ancestor depths that still have siblings below
+              for (const ad of r.activeDepths) {
+                if (ad < r.depth) {
+                  const ax = (ad - 1) * TREE_STEP + 1;
+                  treeLabelLines.push(
+                    <line key={`a-${i}-${ad}`} x1={ax} y1={rowTop} x2={ax} y2={rowTop + ROW_PITCH}
+                      stroke="#c8d6e5" strokeWidth="1" />
+                  );
+                }
+              }
+            });
+
             return (
               <div style={{ position: "relative" }}>
+                {/* Tree lines SVG overlay in label area */}
+                {treeLabelLines.length > 0 && (
+                  <svg
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: `${LABEL_WIDTH}px`,
+                      height: `${totalRows * ROW_PITCH}px`,
+                      pointerEvents: "none",
+                      zIndex: 1,
+                    }}
+                  >
+                    {treeLabelLines}
+                  </svg>
+                )}
                 {flatRows.map((r, i) => (
-                  <ChunkRow
-                    key={i}
-                    chunkName={r.chunk.chunkName}
-                    pct={r.chunk.pct}
-                    deltaLabel={r.chunk.deltaLabel}
-                    startPct={r.chunk.startPct}
-                    barColor={r.barColor}
-                    barBorder={r.barBorder}
-                    indent={r.indent}
-                    labelFontSize={r.labelFontSize}
-                    prefix={r.prefix}
-                  />
+                  <div key={i} style={rowStyle} title={`${r.chunk.chunkName}: ${r.chunk.deltaLabel}`}>
+                    <div style={{ ...labelCellStyle, fontSize: `${r.labelFontSize}px`, paddingLeft: `${r.depth * TREE_STEP + 6}px` }} title={r.chunk.chunkName}>
+                      {truncate(r.chunk.chunkName, 38 - Math.floor(r.depth * 2))}
+                    </div>
+                    <div style={trackCellStyle}>
+                      {r.chunk.startPct != null && r.chunk.startPct < r.chunk.pct ? (
+                        <div style={{ position: "absolute", top: "50%", left: `${r.chunk.startPct}%`, width: `${r.chunk.pct - r.chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: r.barColor, border: `1px solid ${r.barBorder}`, borderRadius: "2px" }} />
+                      ) : (
+                        <div style={{ position: "absolute", top: "50%", left: 0, width: `${r.chunk.pct}%`, height: "1px", background: "#c8d6e5" }} />
+                      )}
+                      <div style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, width: "8px", height: "8px", background: "#0078d4", border: "1px solid #106ebe", transform: "translate(-50%, -50%) rotate(45deg)" }} />
+                      <span style={{ position: "absolute", top: "50%", left: `${r.chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>
+                        {r.chunk.deltaLabel}
+                      </span>
+                    </div>
+                  </div>
                 ))}
                 {/* SVG overlay for connector lines */}
                 {connectors.length > 0 && (
@@ -572,15 +652,15 @@ export default function MiniGanttChart({
                       top: 0,
                       left: `${LABEL_WIDTH}px`,
                       width: `calc(100% - ${LABEL_WIDTH}px)`,
-                      height: `${totalRows * ROW_HEIGHT}px`,
+                      height: `${totalRows * ROW_PITCH}px`,
                       pointerEvents: "none",
                       overflow: "visible",
                     }}
                   >
                     {connectors.map((conn, ci) => {
                       // Right-angle connector: go right from sub-dep diamond, then up to parent start
-                      const fromY = conn.fromRow * ROW_HEIGHT + ROW_HEIGHT / 2;
-                      const toY = conn.toRow * ROW_HEIGHT + ROW_HEIGHT / 2;
+                      const fromY = conn.fromRow * ROW_PITCH + ROW_HEIGHT / 2;
+                      const toY = conn.toRow * ROW_PITCH + ROW_HEIGHT / 2;
                       const fromXPct = conn.fromPct;
                       const toXPct = conn.toPct;
                       return (

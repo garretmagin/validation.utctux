@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 import TreeView from "./CssTree";
 import "./MiniGanttChart.css";
@@ -63,6 +63,14 @@ function formatDurationLabel(ms: number): string {
 
 function truncate(str: string, max: number): string {
   return str.length > max ? str.substring(0, max) + "\u2026" : str;
+}
+
+function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function getBarColor(
@@ -232,6 +240,7 @@ function TestpassBar({
   isCurrent: boolean;
   hasMultipleRuns: boolean;
 }) {
+  const [showTooltip, setShowTooltip] = useState(false);
   if (!run.startTime) return null;
 
   const rStart = new Date(run.startTime).getTime();
@@ -247,7 +256,7 @@ function TestpassBar({
   const displayLabel = truncate(label, 100);
 
   return (
-    <div style={rowStyle} title={`${run.name} — ${formatDurationLabel(durationMs)}`}>
+    <div style={{ ...rowStyle, position: "relative" }}>
       <div
         style={{
           ...labelCellStyle,
@@ -277,6 +286,8 @@ function TestpassBar({
             opacity: isCurrent ? 0.9 : 0.6,
             border: isCurrent ? "none" : `1px dashed ${barColor === "running" ? "#0078d4" : barColor}`,
           }}
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
         >
           {width > 3.5 && (
             <span
@@ -295,6 +306,31 @@ function TestpassBar({
             >
               {formatDurationLabel(durationMs)}
             </span>
+          )}
+          {showTooltip && (
+            <div className="gantt-tooltip">
+              <div className="gantt-tooltip-row">
+                <strong>{run.name}</strong>
+              </div>
+              <div className="gantt-tooltip-row">
+                <span className="gantt-tooltip-label">Duration:</span>
+                <span>{formatDurationLabel(durationMs)}</span>
+              </div>
+              <div className="gantt-tooltip-row">
+                <span className="gantt-tooltip-label">Start:</span>
+                <span>{run.startTime ? formatTime(run.startTime) : "—"}</span>
+              </div>
+              <div className="gantt-tooltip-row">
+                <span className="gantt-tooltip-label">End:</span>
+                <span>{run.endTime ? formatTime(run.endTime) : isRunning ? "Running…" : "—"}</span>
+              </div>
+              {run.result && (
+                <div className="gantt-tooltip-row">
+                  <span className="gantt-tooltip-label">Result:</span>
+                  <span>{run.result}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -350,6 +386,44 @@ function flattenForTracks(
 }
 
 // ChunkTreeLabels removed — using shared TreeView component instead
+
+function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
+  chunk: PreparedChunk;
+  barColor: string;
+  barBorder: string;
+  top: number;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  return (
+    <div
+      className="mini-gantt-track-row"
+      style={{ top: `${top}px`, height: `${ROW_HEIGHT}px` }}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      {chunk.startPct != null && chunk.startPct < chunk.pct ? (
+        <div style={{ position: "absolute", top: "50%", left: `${chunk.startPct}%`, width: `${chunk.pct - chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: barColor, border: `1px solid ${barBorder}`, borderRadius: "2px" }} />
+      ) : (
+        <div style={{ position: "absolute", top: "50%", left: 0, width: `calc(${chunk.pct}% + 2px)`, height: "1px", background: "#c8d6e5" }} />
+      )}
+      <div style={{ position: "absolute", top: "50%", left: `${chunk.pct}%`, width: "8px", height: "8px", background: chunk.isCriticalPath ? "#c44" : "#0078d4", border: `1px solid ${chunk.isCriticalPath ? "#a33" : "#106ebe"}`, transform: "translate(-50%, -50%) rotate(45deg)" }} />
+      <span style={{ position: "absolute", top: "50%", left: `${chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>
+        {chunk.deltaLabel}
+      </span>
+      {showTooltip && (
+        <div className="gantt-tooltip" style={{ left: `${chunk.pct}%` }}>
+          <div className="gantt-tooltip-row">
+            <strong>{chunk.chunkName}</strong>
+          </div>
+          <div className="gantt-tooltip-row">
+            <span className="gantt-tooltip-label">Available:</span>
+            <span>{chunk.deltaLabel}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // --- Main Component ---
 
@@ -578,22 +652,13 @@ export default function MiniGanttChart({
                   }}
                 >
                   {visibleTracks.map((t, i) => (
-                    <div
+                    <ChunkTrackRow
                       key={t.key}
-                      className="mini-gantt-track-row"
-                      style={{ top: `${i * ROW_PITCH}px`, height: `${ROW_HEIGHT}px` }}
-                      title={`${t.chunk.chunkName}: ${t.chunk.deltaLabel}`}
-                    >
-                      {t.chunk.startPct != null && t.chunk.startPct < t.chunk.pct ? (
-                        <div style={{ position: "absolute", top: "50%", left: `${t.chunk.startPct}%`, width: `${t.chunk.pct - t.chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: t.barColor, border: `1px solid ${t.barBorder}`, borderRadius: "2px" }} />
-                      ) : (
-                        <div style={{ position: "absolute", top: "50%", left: 0, width: `calc(${t.chunk.pct}% + 2px)`, height: "1px", background: "#c8d6e5" }} />
-                      )}
-                      <div style={{ position: "absolute", top: "50%", left: `${t.chunk.pct}%`, width: "8px", height: "8px", background: t.chunk.isCriticalPath ? "#c44" : "#0078d4", border: `1px solid ${t.chunk.isCriticalPath ? "#a33" : "#106ebe"}`, transform: "translate(-50%, -50%) rotate(45deg)" }} />
-                      <span style={{ position: "absolute", top: "50%", left: `${t.chunk.pct}%`, transform: "translate(8px, -50%)", fontSize: "10px", color: "#888", whiteSpace: "nowrap", fontWeight: 500 }}>
-                        {t.chunk.deltaLabel}
-                      </span>
-                    </div>
+                      chunk={t.chunk}
+                      barColor={t.barColor}
+                      barBorder={t.barBorder}
+                      top={i * ROW_PITCH}
+                    />
                   ))}
                 </div>
               </div>

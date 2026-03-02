@@ -367,16 +367,16 @@ function ChunkTreeLabels({
         const depth = pathPrefix ? pathPrefix.split("-").length : 0;
         return (
           <li key={key} title={chunk.chunkName}>
+            {hasChildren && (
+              <button
+                className="tree-toggle"
+                onClick={(e) => { e.stopPropagation(); onToggle(key); }}
+                title={isExpanded ? "Collapse" : "Expand"}
+              >
+                {isExpanded ? "−" : "+"}
+              </button>
+            )}
             <span className="chunk-label">
-              {hasChildren && (
-                <button
-                  className="tree-toggle"
-                  onClick={(e) => { e.stopPropagation(); onToggle(key); }}
-                  title={isExpanded ? "Collapse" : "Expand"}
-                >
-                  {isExpanded ? "−" : "+"}
-                </button>
-              )}
               {truncate(chunk.chunkName, 36 - depth * 2)}
             </span>
             {isExpanded && hasChildren && (

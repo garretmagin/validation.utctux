@@ -103,3 +103,4 @@ NuGet feeds: nuget.org + Microsoft `validation.ctproto` (see `nuget.config`).
 ## Agent Workflow
 
 - **NEVER run `git add`, `git stage`, `git commit`, or any git command that modifies the index or history.** Do not stage files. Do not commit. The user will review all changes, stage them, and commit manually. Your only job is to edit files and present a summary of what changed.
+- **Always run a frontend build check (`cd src/frontend && npx tsc --noEmit`) after making any UX/frontend changes.** The project has strict TypeScript settings (`noUnusedLocals`, `noUnusedParameters`) that catch errors not visible in the editor. Verify the build passes before considering frontend work complete.

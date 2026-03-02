@@ -7,6 +7,7 @@ import TestpassDetailPanel from "./TestpassDetailPanel";
 export interface TestpassTableProps {
   testpasses: TestpassDto[];
   buildRegistrationDate: string | null;
+  buildRestartTimes?: string[];
   expandTestpass?: string | null;
 }
 
@@ -128,6 +129,7 @@ const cellStyle: React.CSSProperties = {
 export default function TestpassTable({
   testpasses,
   buildRegistrationDate,
+  buildRestartTimes,
   expandTestpass,
 }: TestpassTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -334,6 +336,7 @@ export default function TestpassTable({
                     <TestpassDetailPanel
                       testpass={tp}
                       buildRegistrationDate={buildRegistrationDate}
+                      buildRestartTimes={buildRestartTimes}
                     />
                   </td>
                 </tr>

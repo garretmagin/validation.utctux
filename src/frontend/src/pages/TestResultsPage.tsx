@@ -150,7 +150,7 @@ export default function TestResultsPage() {
             </div>
 
             <Card className="flex-grow margin-top-16">
-              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.buildStartTime} expandTestpass={expandTestpass} />
+              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.buildStartTime} buildRestartTimes={results.buildInfo.buildRestartTimes} expandTestpass={expandTestpass} />
             </Card>
           </>
         )}

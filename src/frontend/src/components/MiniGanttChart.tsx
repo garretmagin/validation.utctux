@@ -6,6 +6,7 @@ import "./MiniGanttChart.css";
 export interface MiniGanttChartProps {
   testpass: TestpassDto;
   buildRegistrationDate: string | null;
+  buildRestartTimes?: string[];
   collapsedNodes: Set<string>;
   onToggle: (key: string) => void;
 }
@@ -449,6 +450,7 @@ function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
 export default function MiniGanttChart({
   testpass,
   buildRegistrationDate,
+  buildRestartTimes,
   collapsedNodes,
   onToggle,
 }: MiniGanttChartProps) {
@@ -587,6 +589,14 @@ export default function MiniGanttChart({
 
   const hasChunks = chunks.length > 0;
 
+  // Compute build restart positions as percentages
+  const restartPercents = (buildRestartTimes ?? [])
+    .map((t) => {
+      const ms = new Date(t).getTime();
+      return toPct(ms);
+    })
+    .filter((pct) => pct > 0 && pct < 100);
+
   return (
     <div style={containerStyle}>
       {/* Header */}
@@ -594,7 +604,7 @@ export default function MiniGanttChart({
         Timeline from Build Start
       </div>
 
-      {/* Column headers */}
+      {/* Column headers with angled labels */}
       <div
         style={{
           display: "flex",
@@ -602,35 +612,73 @@ export default function MiniGanttChart({
           alignItems: "center",
           borderBottom: "2px solid #e0e0e0",
           marginBottom: "1px",
+          marginTop: "40px",
         }}
       >
         <div
           style={{
             width: `${LABEL_WIDTH}px`,
             minWidth: `${LABEL_WIDTH}px`,
-            fontSize: "10px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            color: "#888",
-            letterSpacing: "0.5px",
           }}
         />
         <div style={{ flex: 1, position: "relative", height: "100%" }}>
-          {/* Build start line label */}
+          {/* Build Started angled label */}
           <span
             style={{
               position: "absolute",
-              left: 0,
-              bottom: 0,
-              fontSize: "9px",
+              left: "0%",
+              transform: "rotate(-45deg)",
+              transformOrigin: "bottom left",
               fontWeight: 600,
               color: "#004578",
-              textTransform: "uppercase",
-              letterSpacing: "0.3px",
+              fontSize: "11px",
+              top: "-14px",
+              whiteSpace: "nowrap",
             }}
           >
-            Build Start
+            Build Started
           </span>
+          {/* Build Started short line */}
+          <span
+            style={{
+              position: "absolute",
+              left: "0%",
+              top: 0,
+              bottom: 0,
+              borderLeft: "2px dashed #004578",
+              zIndex: 1,
+            }}
+          />
+          {/* Build Restarted angled labels */}
+          {restartPercents.map((pct, i) => (
+            <span key={`restart-label-${i}`}>
+              <span
+                style={{
+                  position: "absolute",
+                  left: `${pct.toFixed(1)}%`,
+                  transform: "rotate(-45deg)",
+                  transformOrigin: "bottom left",
+                  fontWeight: 600,
+                  color: "#004578",
+                  fontSize: "11px",
+                  top: "-14px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Build Restarted
+              </span>
+              <span
+                style={{
+                  position: "absolute",
+                  left: `${pct.toFixed(1)}%`,
+                  top: 0,
+                  bottom: 0,
+                  borderLeft: "2px dashed #004578",
+                  zIndex: 1,
+                }}
+              />
+            </span>
+          ))}
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import "./TestpassDetailPanel.css";
 export interface TestpassDetailPanelProps {
   testpass: TestpassDto;
   buildRegistrationDate: string | null;
+  buildRestartTimes?: string[];
 }
 
 const panelStyle: React.CSSProperties = {
@@ -207,6 +208,7 @@ function RunsTable({ runs }: { runs: TestpassDto[] }) {
 export default function TestpassDetailPanel({
   testpass,
   buildRegistrationDate,
+  buildRestartTimes,
 }: TestpassDetailPanelProps) {
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
   const toggleNode = useCallback((key: string) => {
@@ -232,6 +234,7 @@ export default function TestpassDetailPanel({
         <MiniGanttChart
           testpass={testpass}
           buildRegistrationDate={buildRegistrationDate}
+          buildRestartTimes={buildRestartTimes}
           collapsedNodes={collapsedNodes}
           onToggle={toggleNode}
         />

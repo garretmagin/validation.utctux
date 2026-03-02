@@ -495,5 +495,45 @@ public class AggregatedTestpassResultTests
         result.Result.ShouldBe("Failed");
     }
 
+    [Fact]
+    public void Result_Nova_FractionPassRate_CompletedStatus_ReturnsPassed()
+    {
+        // The Nova /TestReport/Default API sometimes returns rates as fractions (0.0-1.0)
+        // instead of percentages (0-100). PassRate=1 means 100%, ExecutionRate=0 means
+        // not populated. A "Completed" status confirms full execution.
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.T3C },
+            NovaTestpass = new NovaTestpass { PassRate = 1, ExecutionRate = 0, StatusName = "Completed" },
+        };
+
+        result.Result.ShouldBe("Passed");
+    }
+
+    [Fact]
+    public void Result_NoSummary_Nova_FractionPassRate_CompletedStatus_ReturnsPassed()
+    {
+        // Same fraction-format scenario but without a UTCT TestpassSummary (Nova-only testpass).
+        var result = new AggregatedTestpassResult
+        {
+            NovaTestpass = new NovaTestpass { PassRate = 1, ExecutionRate = 0, StatusName = "Completed" },
+        };
+
+        result.Result.ShouldBe("Passed");
+    }
+
+    [Fact]
+    public void Result_Nova_FractionPassRate_LowRate_ReturnsFailed()
+    {
+        // Fraction-format rates below 1.0 (100%) should still be Failed.
+        var result = new AggregatedTestpassResult
+        {
+            TestpassSummary = new UtctTestpass { ExecutionSystem = ExecutionSystem.T3C },
+            NovaTestpass = new NovaTestpass { PassRate = 0.95, ExecutionRate = 1, StatusName = "Completed" },
+        };
+
+        result.Result.ShouldBe("Failed");
+    }
+
     #endregion
 }

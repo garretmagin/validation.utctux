@@ -166,6 +166,33 @@ public class AggregatedTestpassResult
     private static bool IsInProgressStatus(string? status) =>
         status is "Running" or "InProgress" or "Queued";
 
+    /// <summary>
+    /// Normalizes a rate value to the 0-100 percentage scale.
+    /// The Nova /TestReport/Default API sometimes returns rates as fractions (0.0-1.0)
+    /// instead of percentages (0-100).
+    /// </summary>
+    internal static double NormalizeRate(double rate) =>
+        rate is > 0 and <= 1 ? rate * 100 : rate;
+
+    /// <summary>
+    /// Determines whether the Nova testpass rates indicate a passing result,
+    /// handling both fraction (0-1) and percentage (0-100) rate formats.
+    /// When status is "Completed" and execution rate is 0, treats execution as fully complete
+    /// since some testpasses (e.g., Canary) don't populate ExecutionRate.
+    /// </summary>
+    private bool IsNovaPassing()
+    {
+        if (NovaTestpass is null) return false;
+
+        var passRate = NormalizeRate(NovaTestpass.PassRate);
+        var executionRate = NormalizeRate(NovaTestpass.ExecutionRate);
+
+        if (NovaTestpass.StatusName == "Completed" && executionRate == 0)
+            executionRate = 100;
+
+        return passRate >= 100 && executionRate >= 100;
+    }
+
     private bool HasPendingDependencies =>
         ChunkAvailability is { Count: > 0 } &&
         ChunkAvailability.Any(c => c.AvailableAt is null);
@@ -193,7 +220,7 @@ public class AggregatedTestpassResult
                     return "WaitingForDependencies";
                 }
 
-                return NovaTestpass.PassRate < 100 || NovaTestpass.ExecutionRate < 100 ? "Failed" : "Passed";
+                return IsNovaPassing() ? "Passed" : "Failed";
             }
 
             if (TestpassSummary.ExecutionSystem == ExecutionSystem.CloudTest)
@@ -232,7 +259,7 @@ public class AggregatedTestpassResult
                     return "WaitingForDependencies";
                 }
 
-                return NovaTestpass.PassRate < 100 || NovaTestpass.ExecutionRate < 100 ? "Failed" : "Passed";
+                return IsNovaPassing() ? "Passed" : "Failed";
             }
         }
     }

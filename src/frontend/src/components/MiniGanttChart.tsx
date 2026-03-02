@@ -347,6 +347,11 @@ interface PreparedChunk {
   startPct?: number;
   subDeps: PreparedChunk[];
   isCriticalPath: boolean;
+  startedAt: string | null;
+  startedDeltaLabel: string | null;
+  availableAt: string | null;
+  durationLabel: string | null;
+  mediaCreationUrl: string | null;
 }
 
 interface FlatTrack {
@@ -415,10 +420,38 @@ function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
           <div className="gantt-tooltip-row">
             <strong>{chunk.chunkName}</strong>
           </div>
+          {chunk.startedAt && (
+            <div className="gantt-tooltip-row">
+              <span className="gantt-tooltip-label">Started:</span>
+              <span>{formatTime(chunk.startedAt)}{chunk.startedDeltaLabel ? ` (${chunk.startedDeltaLabel})` : ""}</span>
+            </div>
+          )}
           <div className="gantt-tooltip-row">
             <span className="gantt-tooltip-label">Available:</span>
-            <span>{chunk.deltaLabel}</span>
+            <span>{chunk.availableAt ? formatTime(chunk.availableAt) : "—"} ({chunk.deltaLabel})</span>
           </div>
+          {chunk.durationLabel && (
+            <div className="gantt-tooltip-row">
+              <span className="gantt-tooltip-label">Duration:</span>
+              <span>{chunk.durationLabel}</span>
+            </div>
+          )}
+          {chunk.mediaCreationUrl && (
+            <>
+              <div className="gantt-tooltip-separator" />
+              <div className="gantt-tooltip-row">
+                <a
+                  href={chunk.mediaCreationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#6db3f2", textDecoration: "underline", pointerEvents: "auto" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View in Media Creation
+                </a>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -512,6 +545,7 @@ export default function MiniGanttChart({
         const subDeps = depth < 10 && chunk.subDependencies
           ? prepareChunks(chunk.subDependencies, depth + 1)
           : [];
+        const durationMs2 = (startMs != null && deltaMs != null) ? deltaMs - startMs : null;
         return {
           chunkName: chunk.chunkName,
           pct: toPct(buildStart + deltaMs),
@@ -519,6 +553,11 @@ export default function MiniGanttChart({
           startPct: startMs != null ? toPct(buildStart + startMs) : undefined,
           subDeps,
           isCriticalPath: chunk.isCriticalPath ?? false,
+          startedAt: chunk.startedAt ?? null,
+          startedDeltaLabel: startMs != null ? formatDeltaShort(startMs) : null,
+          availableAt: chunk.availableAt ?? null,
+          durationLabel: durationMs2 != null && durationMs2 > 0 ? formatDurationLabel(durationMs2) : null,
+          mediaCreationUrl: chunk.mediaCreationUrl ?? null,
         };
       })
       .filter(Boolean) as PreparedChunk[];

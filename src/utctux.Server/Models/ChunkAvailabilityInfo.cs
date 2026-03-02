@@ -12,4 +12,5 @@ public record ChunkAvailabilityInfo(
     TimeSpan? StartedAfterBuildStart = null,
     DateTimeOffset? StartedAt = null,
     IReadOnlyList<ChunkAvailabilityInfo>? SubDependencies = null,
-    bool IsCriticalPath = false);
+    bool IsCriticalPath = false,
+    string? MediaCreationUrl = null);

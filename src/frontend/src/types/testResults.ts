@@ -30,6 +30,7 @@ export interface ChunkAvailabilityDto {
   startedAt: string | null;
   subDependencies: ChunkAvailabilityDto[] | null;
   isCriticalPath: boolean;
+  mediaCreationUrl: string | null;
 }
 
 export interface TestpassDto {

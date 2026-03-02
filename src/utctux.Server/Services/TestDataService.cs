@@ -896,6 +896,8 @@ public class TestDataService
     {
         if (mediaGraph is null) return;
 
+        var graphId = mediaGraph.Id;
+
         // Build lookup: all artifacts by (name, flavor) → artifact, case-insensitive
         var allArtifacts = new Dictionary<(string Name, string Flavor), MediaCreationArtifact>(
             new NameFlavorComparer());
@@ -937,13 +939,14 @@ public class TestDataService
                     // Resolve sub-dependencies (full transitive closure)
                     var subDeps = ResolveSubDependencies(
                         matchedArtifact.Id, dependsOn, artifactsById, buildStartTime,
-                        mediaGraphChunkLookup, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                        mediaGraphChunkLookup, graphId, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
                     enrichedChunks.Add(chunk with
                     {
                         StartedAt = startedAt,
                         StartedAfterBuildStart = startedDelta,
                         SubDependencies = subDeps.Count > 0 ? subDeps : null,
+                        MediaCreationUrl = $"https://mediacreation.microsoft.com/Media2/BuildableArtifactDetails?requestGraphId={graphId}&artifactId={matchedArtifact.Id}",
                     });
                 }
                 else
@@ -1015,6 +1018,7 @@ public class TestDataService
         Dictionary<string, MediaCreationArtifact> artifactsById,
         DateTimeOffset? buildStartTime,
         Dictionary<string, ChunkAvailabilityInfo> mediaGraphChunkLookup,
+        Guid graphId,
         HashSet<string> visited)
     {
         var result = new List<ChunkAvailabilityInfo>();
@@ -1052,7 +1056,7 @@ public class TestDataService
                 : (TimeSpan?)null;
 
             // Recurse for sub-sub-dependencies
-            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, mediaGraphChunkLookup, visited);
+            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, mediaGraphChunkLookup, graphId, visited);
 
             // Backtrack: remove depId so sibling branches can independently resolve
             // the same node in their own subtrees (diamond dependencies are valid)
@@ -1065,7 +1069,8 @@ public class TestDataService
                 availableAt,
                 startedDelta,
                 startedAt,
-                subSubDeps.Count > 0 ? subSubDeps : null));
+                subSubDeps.Count > 0 ? subSubDeps : null,
+                MediaCreationUrl: $"https://mediacreation.microsoft.com/Media2/BuildableArtifactDetails?requestGraphId={graphId}&artifactId={depArtifact.Id}"));
         }
 
         return result

@@ -904,12 +904,14 @@ public class TestDataService
 
         // Also build lookup by artifact ID for dependency resolution
         var artifactsById = new Dictionary<string, MediaCreationArtifact>(StringComparer.OrdinalIgnoreCase);
+        var buildableIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var artifact in mediaGraph.BuildableArtifacts ?? [])
         {
             var key = (artifact.Name, artifact.Flavor ?? "");
             allArtifacts.TryAdd(key, artifact);
             artifactsById.TryAdd(artifact.Id, artifact);
+            buildableIds.Add(artifact.Id);
         }
         foreach (var artifact in mediaGraph.ExternalArtifacts ?? [])
         {
@@ -939,14 +941,16 @@ public class TestDataService
                     // Resolve sub-dependencies (full transitive closure)
                     var subDeps = ResolveSubDependencies(
                         matchedArtifact.Id, dependsOn, artifactsById, buildStartTime,
-                        mediaGraphChunkLookup, graphId, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                        mediaGraphChunkLookup, graphId, buildableIds, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
                     enrichedChunks.Add(chunk with
                     {
                         StartedAt = startedAt,
                         StartedAfterBuildStart = startedDelta,
                         SubDependencies = subDeps.Count > 0 ? subDeps : null,
-                        MediaCreationUrl = $"https://mediacreation.microsoft.com/Media2/BuildableArtifactDetails?requestGraphId={graphId}&artifactId={matchedArtifact.Id}",
+                        MediaCreationUrl = buildableIds.Contains(matchedArtifact.Id)
+                            ? $"https://mediacreation.microsoft.com/Media2/BuildableArtifactDetails?requestGraphId={graphId}&artifactId={matchedArtifact.Id}"
+                            : null,
                     });
                 }
                 else
@@ -1019,6 +1023,7 @@ public class TestDataService
         DateTimeOffset? buildStartTime,
         Dictionary<string, ChunkAvailabilityInfo> mediaGraphChunkLookup,
         Guid graphId,
+        HashSet<string> buildableIds,
         HashSet<string> visited)
     {
         var result = new List<ChunkAvailabilityInfo>();
@@ -1056,7 +1061,7 @@ public class TestDataService
                 : (TimeSpan?)null;
 
             // Recurse for sub-sub-dependencies
-            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, mediaGraphChunkLookup, graphId, visited);
+            var subSubDeps = ResolveSubDependencies(depId, dependsOn, artifactsById, buildStartTime, mediaGraphChunkLookup, graphId, buildableIds, visited);
 
             // Backtrack: remove depId so sibling branches can independently resolve
             // the same node in their own subtrees (diamond dependencies are valid)
@@ -1070,7 +1075,9 @@ public class TestDataService
                 startedDelta,
                 startedAt,
                 subSubDeps.Count > 0 ? subSubDeps : null,
-                MediaCreationUrl: $"https://mediacreation.microsoft.com/Media2/BuildableArtifactDetails?requestGraphId={graphId}&artifactId={depArtifact.Id}"));
+                MediaCreationUrl: buildableIds.Contains(depArtifact.Id)
+                    ? $"https://mediacreation.microsoft.com/Media2/BuildableArtifactDetails?requestGraphId={graphId}&artifactId={depArtifact.Id}"
+                    : null));
         }
 
         return result

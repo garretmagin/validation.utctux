@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 import TreeView from "./CssTree";
 import "./MiniGanttChart.css";
@@ -88,6 +88,79 @@ function getBarColor(
   return res === "passed" ? "#107c10" : "#0078d4";
 }
 
+// --- Cone-of-prediction tooltip hook ---
+
+/** Cross product sign for point-in-triangle test. */
+function crossSign(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  return (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+}
+
+/**
+ * Returns true if `point` is inside the triangle formed by the mouse exit
+ * position (apex) and the two bottom corners of the tooltip rect (padded),
+ * OR if the point is inside the padded tooltip rect itself.
+ */
+function isInCone(
+  apexX: number, apexY: number,
+  px: number, py: number,
+  rect: DOMRect, pad: number,
+): boolean {
+  // Point inside padded tooltip rect?
+  if (px >= rect.left - pad && px <= rect.right + pad &&
+      py >= rect.top - pad && py <= rect.bottom + pad) return true;
+
+  // Triangle: apex → bottom-left corner → bottom-right corner (padded)
+  const bx = rect.left - pad, by = rect.bottom + pad;
+  const cx = rect.right + pad, cy = rect.bottom + pad;
+  const d1 = crossSign(px, py, apexX, apexY, bx, by);
+  const d2 = crossSign(px, py, bx, by, cx, cy);
+  const d3 = crossSign(px, py, cx, cy, apexX, apexY);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
+/**
+ * Hook that keeps a tooltip visible while the cursor moves towards it,
+ * using a cone-of-prediction (triangle from exit point to tooltip edges).
+ * The tooltip stays interactive so links inside it can be clicked.
+ */
+function useTooltipCone() {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const overTooltipRef = useRef(false);
+  const moveCleanupRef = useRef<(() => void) | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimer = () => { if (timerRef.current != null) { clearTimeout(timerRef.current); timerRef.current = null; } };
+  const clearMove = () => { moveCleanupRef.current?.(); moveCleanupRef.current = null; };
+
+  const hide = () => { clearTimer(); clearMove(); overTooltipRef.current = false; setShowTooltip(false); };
+
+  const onTriggerEnter = () => { clearTimer(); clearMove(); overTooltipRef.current = false; setShowTooltip(true); };
+
+  const onTriggerLeave = (e: React.MouseEvent) => {
+    const exitX = e.clientX, exitY = e.clientY;
+    const tip = tooltipRef.current;
+    if (!tip) { hide(); return; }
+    const rect = tip.getBoundingClientRect();
+    const PAD = 40;
+
+    const onMove = (ev: MouseEvent) => {
+      if (tip.contains(ev.target as Node)) { clearMove(); overTooltipRef.current = true; return; }
+      if (!isInCone(exitX, exitY, ev.clientX, ev.clientY, rect, PAD)) hide();
+    };
+    document.addEventListener("mousemove", onMove);
+    moveCleanupRef.current = () => document.removeEventListener("mousemove", onMove);
+    timerRef.current = setTimeout(() => { if (!overTooltipRef.current) hide(); }, 600);
+  };
+
+  const onTooltipEnter = () => { clearTimer(); clearMove(); overTooltipRef.current = true; };
+  const onTooltipLeave = () => { overTooltipRef.current = false; clearTimer(); timerRef.current = setTimeout(hide, 150); };
+
+  useEffect(() => () => { clearTimer(); clearMove(); }, []);
+
+  return { showTooltip, onTriggerEnter, onTriggerLeave, onTooltipEnter, onTooltipLeave, tooltipRef };
+}
+
 // --- Styles ---
 
 const containerStyle: React.CSSProperties = {
@@ -128,6 +201,7 @@ const trackCellStyle: React.CSSProperties = {
 
 // --- Sub-components ---
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function ChunkRow({
   chunkName,
   pct,
@@ -240,7 +314,7 @@ function TestpassBar({
   isCurrent: boolean;
   hasMultipleRuns: boolean;
 }) {
-  const [showTooltip, setShowTooltip] = useState(false);
+  const { showTooltip, onTriggerEnter, onTriggerLeave, onTooltipEnter, onTooltipLeave, tooltipRef } = useTooltipCone();
   if (!run.startTime) return null;
 
   const rStart = new Date(run.startTime).getTime();
@@ -286,8 +360,8 @@ function TestpassBar({
             opacity: isCurrent ? 0.9 : 0.6,
             border: isCurrent ? "none" : `1px dashed ${barColor === "running" ? "#0078d4" : barColor}`,
           }}
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
+          onMouseEnter={onTriggerEnter}
+          onMouseLeave={onTriggerLeave}
         >
           {width > 3.5 && (
             <span
@@ -308,7 +382,13 @@ function TestpassBar({
             </span>
           )}
           {showTooltip && (
-            <div className="gantt-tooltip">
+            <div
+              ref={tooltipRef}
+              className="gantt-tooltip"
+              style={{ pointerEvents: "auto" }}
+              onMouseEnter={onTooltipEnter}
+              onMouseLeave={onTooltipLeave}
+            >
               <div className="gantt-tooltip-row">
                 <strong>{run.name}</strong>
               </div>
@@ -398,13 +478,13 @@ function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
   barBorder: string;
   top: number;
 }) {
-  const [showTooltip, setShowTooltip] = useState(false);
+  const { showTooltip, onTriggerEnter, onTriggerLeave, onTooltipEnter, onTooltipLeave, tooltipRef } = useTooltipCone();
   return (
     <div
       className="mini-gantt-track-row"
       style={{ top: `${top}px`, height: `${ROW_HEIGHT}px` }}
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
+      onMouseEnter={onTriggerEnter}
+      onMouseLeave={onTriggerLeave}
     >
       {chunk.startPct != null && chunk.startPct < chunk.pct ? (
         <div style={{ position: "absolute", top: "50%", left: `${chunk.startPct}%`, width: `${chunk.pct - chunk.startPct}%`, height: "6px", transform: "translateY(-50%)", background: barColor, border: `1px solid ${barBorder}`, borderRadius: "2px" }} />
@@ -416,7 +496,13 @@ function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
         {chunk.deltaLabel}
       </span>
       {showTooltip && (
-        <div className="gantt-tooltip" style={{ left: `${chunk.pct}%` }}>
+        <div
+          ref={tooltipRef}
+          className="gantt-tooltip"
+          style={{ left: `${chunk.pct}%`, pointerEvents: "auto" }}
+          onMouseEnter={onTooltipEnter}
+          onMouseLeave={onTooltipLeave}
+        >
           <div className="gantt-tooltip-row">
             <strong>{chunk.chunkName}</strong>
           </div>
@@ -444,7 +530,7 @@ function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
                   href={chunk.mediaCreationUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: "#6db3f2", textDecoration: "underline", pointerEvents: "auto" }}
+                  style={{ color: "#6db3f2", textDecoration: "underline" }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   View in Media Creation

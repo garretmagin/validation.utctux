@@ -121,7 +121,7 @@ function DependenciesTable({
         className="deps-tree"
         collapsedNodes={collapsedNodes}
         onToggle={onToggle}
-        renderContent={(chunk, depth) => {
+        renderContent={(chunk, _depth) => {
           const delta = formatDelta(chunk.availableAfterBuildStart);
           return (
             <span className="chunk-label deps-row">

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
+import TreeView from "./CssTree";
 import "./MiniGanttChart.css";
 
 export interface MiniGanttChartProps {
@@ -346,53 +347,7 @@ function flattenForTracks(
   return result;
 }
 
-function ChunkTreeLabels({
-  chunks,
-  collapsedNodes,
-  onToggle,
-  pathPrefix = "",
-}: {
-  chunks: PreparedChunk[];
-  collapsedNodes: Set<string>;
-  onToggle: (key: string) => void;
-  pathPrefix?: string;
-}) {
-  if (chunks.length === 0) return null;
-  return (
-    <ul>
-      {chunks.map((chunk, i) => {
-        const key = pathPrefix ? `${pathPrefix}-${i}` : `${i}`;
-        const hasChildren = chunk.subDeps.length > 0;
-        const isExpanded = !collapsedNodes.has(key);
-        const depth = pathPrefix ? pathPrefix.split("-").length : 0;
-        return (
-          <li key={key} title={chunk.chunkName}>
-            {hasChildren && (
-              <button
-                className="tree-toggle"
-                onClick={(e) => { e.stopPropagation(); onToggle(key); }}
-                title={isExpanded ? "Collapse" : "Expand"}
-              >
-                {isExpanded ? "−" : "+"}
-              </button>
-            )}
-            <span className="chunk-label">
-              {truncate(chunk.chunkName, 36 - depth * 2)}
-            </span>
-            {isExpanded && hasChildren && (
-              <ChunkTreeLabels
-                chunks={chunk.subDeps}
-                collapsedNodes={collapsedNodes}
-                onToggle={onToggle}
-                pathPrefix={key}
-              />
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+// ChunkTreeLabels removed — using shared TreeView component instead
 
 // --- Main Component ---
 
@@ -606,20 +561,18 @@ export default function MiniGanttChart({
             return (
               <div style={{ position: "relative", display: "flex" }}>
                 {/* Label tree panel */}
-                <div
-                  className="mini-gantt-tree"
-                  style={{
-                    width: `${LABEL_WIDTH}px`,
-                    minWidth: `${LABEL_WIDTH}px`,
-                    flexShrink: 0,
-                  }}
-                >
-                  <ChunkTreeLabels
-                    chunks={chunks}
-                    collapsedNodes={collapsedNodes}
-                    onToggle={toggleNode}
-                  />
-                </div>
+                <TreeView<PreparedChunk>
+                  items={chunks}
+                  getChildren={(c) => c.subDeps}
+                  collapsedNodes={collapsedNodes}
+                  onToggle={toggleNode}
+                  renderContent={(chunk, depth) => (
+                    <span className="chunk-label" title={chunk.chunkName}>
+                      {truncate(chunk.chunkName, 36 - depth * 2)}
+                    </span>
+                  )}
+                  className="mini-gantt-labels"
+                />
                 {/* Track bar panel */}
                 <div
                   style={{

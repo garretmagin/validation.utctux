@@ -1,0 +1,117 @@
+/* CssTree.css — Shared CSS tree connectors for nested ul/li hierarchies */
+
+.css-tree {
+  --tree-clr: #c8d6e5;
+  --row-height: 24px;
+  --tree-offset: 12px;
+  --tree-thickness: 1px;
+  --tree-style: solid;
+}
+
+.css-tree ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* All items: base styles */
+.css-tree li {
+  position: relative;
+  color: #444;
+  font-size: 12px;
+  padding-left: 6px;
+}
+
+/* Text label inside each li — z-index ensures it paints above child ::before connectors */
+.css-tree .chunk-label {
+  display: block;
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: var(--row-height);
+  height: var(--row-height);
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Nested items: tree connectors */
+.css-tree li li {
+  padding-left: var(--tree-offset);
+  border-left: var(--tree-thickness) var(--tree-style) var(--tree-clr);
+  font-size: 10px;
+}
+
+.css-tree li li:last-child {
+  border-color: transparent;
+}
+
+/* L-shaped connector: vertical + horizontal line to junction */
+.css-tree li li::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--row-height) / -2 + var(--tree-thickness));
+  left: calc(var(--tree-thickness) * -1);
+  width: calc(var(--tree-offset) + var(--tree-thickness));
+  height: var(--row-height);
+  border-left: var(--tree-thickness) var(--tree-style) var(--tree-clr);
+  border-bottom: var(--tree-thickness) var(--tree-style) var(--tree-clr);
+  pointer-events: none;
+}
+
+/* Expand/collapse toggle button — positioned at connector junction */
+.css-tree .tree-toggle {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--row-height) / 2);
+  transform: translate(-50%, -50%);
+  left: 6px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid #a0b4c8;
+  border-radius: 2px;
+  background: #fff;
+  color: #666;
+  font-size: 10px;
+  font-family: monospace;
+  line-height: 10px;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Nested items: adjust toggle to content start */
+.css-tree li li > .tree-toggle {
+  left: var(--tree-offset);
+}
+
+.css-tree .tree-toggle:hover {
+  border-color: #0078d4;
+  color: #0078d4;
+  background: #f0f6ff;
+}
+
+/* Vertical line from toggle bottom to children — drawn by ul::before using same border mechanism */
+.css-tree .tree-toggle ~ ul {
+  position: relative;
+}
+
+.css-tree .tree-toggle ~ ul::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--row-height) / -2 + 6px);
+  left: 0;
+  width: 0;
+  height: calc(var(--row-height) / 2 - 6px);
+  border-left: var(--tree-thickness) var(--tree-style) var(--tree-clr);
+}
+
+/* Push label text right when toggle button precedes it */
+.css-tree .tree-toggle + .chunk-label {
+  padding-left: 8px;
+}

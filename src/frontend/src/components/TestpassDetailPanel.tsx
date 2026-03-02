@@ -1,5 +1,7 @@
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 import MiniGanttChart from "./MiniGanttChart";
+import TreeView from "./CssTree";
+import "./TestpassDetailPanel.css";
 
 export interface TestpassDetailPanelProps {
   testpass: TestpassDto;
@@ -83,43 +85,6 @@ function formatDateTime(value: string | null): string {
   }
 }
 
-function renderDependencyRows(
-  chunks: ChunkAvailabilityDto[],
-  depth: number = 0,
-  maxDepth: number = 10
-): React.ReactNode[] {
-  const rows: React.ReactNode[] = [];
-  chunks.forEach((chunk, i) => {
-    const isLast = i === chunks.length - 1;
-    const prefix = depth > 0 ? (isLast ? "└ " : "├ ") : "";
-    const indent = depth * 16;
-    const delta = formatDelta(chunk.availableAfterBuildStart);
-    const textColor = depth > 0 ? "#666" : undefined;
-
-    rows.push(
-      <tr key={`${depth}-${i}`} style={{ color: textColor }}>
-        <td style={{ ...tdStyle, paddingLeft: `${8 + indent}px` }}>
-          {prefix && (
-            <span style={{ fontFamily: "monospace", color: "#999" }}>{prefix}</span>
-          )}
-          {chunk.chunkName}
-        </td>
-        <td style={tdStyle}>{chunk.flavor || "—"}</td>
-        <td style={tdStyle}>{formatDateTime(chunk.startedAt)}</td>
-        <td style={tdStyle}>{formatDateTime(chunk.availableAt)}</td>
-        <td style={tdStyle}>
-          <span style={{ color: delta.color }}>{delta.text}</span>
-        </td>
-      </tr>
-    );
-
-    if (chunk.subDependencies && chunk.subDependencies.length > 0 && depth < maxDepth) {
-      rows.push(...renderDependencyRows(chunk.subDependencies, depth + 1, maxDepth));
-    }
-  });
-  return rows;
-}
-
 function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
   if (!chunks || chunks.length === 0) {
     return (
@@ -134,20 +99,30 @@ function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
       <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "4px" }}>
         Dependencies
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Chunk Name</th>
-            <th style={thStyle}>Flavor</th>
-            <th style={thStyle}>Started At</th>
-            <th style={thStyle}>Delivered At</th>
-            <th style={thStyle}>Available After Build Start</th>
-          </tr>
-        </thead>
-        <tbody>
-          {renderDependencyRows(chunks)}
-        </tbody>
-      </table>
+      <div className="deps-tree-header">
+        <span>Chunk Name</span>
+        <span>Flavor</span>
+        <span>Started At</span>
+        <span>Delivered At</span>
+        <span>Avail. After Build</span>
+      </div>
+      <TreeView<ChunkAvailabilityDto>
+        items={chunks}
+        getChildren={(c) => c.subDependencies ?? []}
+        className="deps-tree"
+        renderContent={(chunk, depth) => {
+          const delta = formatDelta(chunk.availableAfterBuildStart);
+          return (
+            <span className="chunk-label deps-row">
+              <span className="deps-cell-name">{chunk.chunkName}</span>
+              <span className="deps-cell">{chunk.flavor || "—"}</span>
+              <span className="deps-cell">{formatDateTime(chunk.startedAt)}</span>
+              <span className="deps-cell">{formatDateTime(chunk.availableAt)}</span>
+              <span className="deps-cell" style={{ color: delta.color }}>{delta.text}</span>
+            </span>
+          );
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,49 @@
+/* TestpassDetailPanel.css — Dependencies tree grid layout */
+
+.deps-tree-header {
+  display: grid;
+  grid-template-columns: 1fr 80px 140px 140px 110px;
+  gap: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-bottom: 1px solid #ddd;
+  white-space: nowrap;
+}
+
+/* Override chunk-label to use grid for multi-column rows */
+.deps-tree .chunk-label.deps-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 140px 140px 110px;
+  gap: 0 8px;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.deps-tree .deps-cell-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deps-tree .deps-cell {
+  white-space: nowrap;
+  font-size: 11px;
+  color: #555;
+}
+
+/* Root items slightly larger font */
+.deps-tree > ul > li {
+  font-size: 13px;
+}
+
+.deps-tree > ul > li .deps-cell {
+  font-size: 12px;
+  color: #333;
+}
+
+/* Match parent background for grid rows */
+.deps-tree .chunk-label {
+  background: #f8f8f8;
+}

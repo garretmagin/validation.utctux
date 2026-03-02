@@ -175,19 +175,23 @@ api.MapGet("testresults/{*fqbn}", ...);
 api.MapPost("testresults/{*fqbn}", ...);
 ```
 
-The `"UsersOnly"` policy requires the `Users` role, which maps to app role `MSFT/Role:Users` in the Entra ID app registration. Users without this role see an Access Denied page with a link to request the [TM-TestScheduling entitlement](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3).
+The `"UsersOnly"` policy requires the `Users` role, which maps to app role `MSFT/Role:Users` in the Entra ID app registration. Users without this role see an Access Denied page with a link to request the [TM-TestScheduling entitlement](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3). Users who already have OS source code read access (`os2020source-ylei`) are automatically granted access without needing to join TM-TestScheduling.
 
 > **Security note:** The middleware only accepts Bearer tokens via the `Authorization` header. Cookie-based authentication is intentionally not supported to prevent CSRF attacks.
 
-### Access Control via TM-TestScheduling Entitlement
+### Access Control via Entitlements
 
-Access to utctux is gated by the **TM-TestScheduling** CoreIdentity entitlement. Users join the entitlement at [https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3), which adds them to one of two CCG (CoreIdentity Compliance Groups) security groups in the Microsoft tenant.
+Access to utctux is gated by membership in one of two CoreIdentity entitlements. Users need only one:
+
+1. **TM-TestScheduling** — The primary entitlement. Users join at [https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3), which adds them to one of two CCG security groups.
+
+2. **os.2020 Source Eng FTE R/O** (`os2020source-ylei`) — Users with OS source code read access are automatically granted utctux access through their existing Reader/NTDEVreader security groups.
 
 #### How it works
 
-1. User joins the TM-TestScheduling entitlement via CoreIdentity
-2. CoreIdentity adds the user to one of the two CCG security groups
-3. Both groups are assigned the `Users` app role on the `utctux-api` service principal
+1. User joins the TM-TestScheduling entitlement via CoreIdentity (or already has `os2020source-ylei` membership)
+2. CoreIdentity adds the user to one of the associated security groups
+3. All groups are assigned the `Users` app role on the `utctux-api` service principal
 4. When the user authenticates and requests a token for `api://utctux`, Entra ID includes `"Users"` in the token's `roles` claim
 5. The AuthES middleware validates the token and the `"UsersOnly"` authorization policy checks for the `Users` role
 6. If the role is missing, the frontend shows an Access Denied page with a link to request the entitlement
@@ -205,12 +209,25 @@ The `Users` app role is defined on the `utctux-api` app registration:
 
 #### Assigned Security Groups
 
+**TM-TestScheduling entitlement:**
+
 | Group Alias | Object ID | Source |
 |-------------|-----------|--------|
 | `CCG-tmtestschedu-0wu3-User-zq4j-1` | `0ef390f8-afc0-475f-b28b-ed6ba278f8a6` | TM-TestScheduling entitlement |
 | `CCG-tmtestschedu-0wu3-User-irb1-1` | `9e1a3740-dddf-4635-a387-e8a41543ed98` | TM-TestScheduling entitlement |
 
 > **Why two groups?** CoreIdentity entitlements split membership across multiple CCG groups to handle membership limits. Both groups must be assigned the app role so that all entitlement members get access regardless of which group they land in.
+
+**os2020source-ylei entitlement (OS source code readers):**
+
+| Group Alias | Object ID | Source |
+|-------------|-----------|--------|
+| `CCG-os2020source-ylei-Reader-zior-1` | `54565691-5a4c-46ac-86e0-1642148c55cb` | os2020source-ylei entitlement |
+| `CCG-os2020source-ylei-Reader-s3w1-1` | `71404e74-69ad-4d20-8464-1c8784b11ec0` | os2020source-ylei entitlement |
+| `CRG-os2020source-ylei-Reader-5so0` | `f3a748ec-8d8b-4b68-93c3-7a4e6bd5bf16` | os2020source-ylei entitlement |
+| `CRG-os2020source-ylei-NTDEVreader-mls0` | `9b80875c-633b-46a4-aac0-bf59967ea554` | os2020source-ylei entitlement |
+| `CCG-os2020source-ylei-NTDEVreader-3ukn-1` | `8fe3da16-f428-450c-85a2-c32d649a8711` | os2020source-ylei entitlement |
+| `CCG-os2020source-ylei-NTDEVreader-ox1j-1` | `bd7aeb49-953b-4ba1-b2e8-c8b753270800` | os2020source-ylei entitlement |
 
 #### Managing role assignments
 
@@ -513,7 +530,7 @@ az ad app update --id a7cb231c-7e92-4e78-8800-5241154741f2 \
 | Health check shows Unhealthy/Unauthorized | Middleware blocking `/health` endpoint | Middleware skips non-`/api` paths — verify `StartsWithSegments("/api")` check |
 | `Missing roles or security groups configuration` | Empty Roles and SecurityGroups in config | At least one role or security group entry must be defined |
 | 401 on API calls | Token expired or wrong audience | Check browser DevTools → Network → Authorization header; verify audience in appsettings matches `api://utctux` |
-| 403 / Access Denied page shown | User is authenticated but lacks the `Users` role | User must join the [TM-TestScheduling entitlement](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3); or verify the CCG group is assigned the app role |
+| 403 / Access Denied page shown | User is authenticated but lacks the `Users` role | User must join the [TM-TestScheduling entitlement](https://coreidentity.microsoft.com/manage/Entitlement/entitlement/tmtestschedu-0wu3) or already have `os2020source-ylei` membership; or verify the security groups are assigned the app role |
 | `No authenticationScheme was specified` | `AddAuthentication()` not called or no default scheme | Ensure `PassThroughAuthHandler` is registered as the default scheme via `AddAuthentication("AuthES").AddScheme(...)` |
 | Silent token acquisition fails | Session expired | MSAL falls back to `acquireTokenRedirect()` automatically |
 | `ServiceManagementReference field is required` | Microsoft tenant policy | Include `serviceManagementReference` in `az rest` body when creating app registrations |

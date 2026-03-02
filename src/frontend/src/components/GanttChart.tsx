@@ -441,6 +441,32 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
       titleProps={{ text: "Execution Timeline", ariaLevel: 2 }}
     >
       <div className="gantt-container" style={{ padding: "0 20px 20px", "--gantt-label-width": `${labelWidth}px` } as React.CSSProperties}>
+        {/* Info section */}
+        <div style={{
+          display: "inline-flex",
+          alignItems: "flex-start",
+          gap: 8,
+          fontSize: 12,
+          color: "#888",
+          lineHeight: 1.6,
+          marginBottom: 10,
+          padding: "8px 12px",
+          background: "#f8f9fa",
+          border: "1px solid #e8e8e8",
+          borderRadius: 4,
+        }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2, opacity: 0.6 }}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span>Testpass execution times as the build completes and reruns are triggered. Click any row to see chunk release timing and dependency details.</span>
+            <span style={{ marginTop: 2 }}>
+              This is an experimental report. Questions or feedback?{" "}
+              <a href="mailto:utctdev@microsoft.com?subject=ux.utct.dev%20feedback%2Fquestions" style={{ color: "#0078d4" }}>
+                utctdev@microsoft.com
+              </a>
+            </span>
+          </div>
+        </div>
+
         {/* Legend */}
         <div className="gantt-legend">
           <div className="gantt-legend-section">

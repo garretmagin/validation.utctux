@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 import TreeView from "./CssTree";
 import "./MiniGanttChart.css";
@@ -6,6 +6,8 @@ import "./MiniGanttChart.css";
 export interface MiniGanttChartProps {
   testpass: TestpassDto;
   buildRegistrationDate: string | null;
+  collapsedNodes: Set<string>;
+  onToggle: (key: string) => void;
 }
 
 // --- Helpers ---
@@ -354,16 +356,9 @@ function flattenForTracks(
 export default function MiniGanttChart({
   testpass,
   buildRegistrationDate,
+  collapsedNodes,
+  onToggle,
 }: MiniGanttChartProps) {
-  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
-  const toggleNode = useCallback((key: string) => {
-    setCollapsedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
 
   const hasChunkData = (testpass.dependentChunks ?? []).some(
     (c) => parseTimeSpanToMs(c.availableAfterBuildStart) != null
@@ -565,7 +560,7 @@ export default function MiniGanttChart({
                   items={chunks}
                   getChildren={(c) => c.subDeps}
                   collapsedNodes={collapsedNodes}
-                  onToggle={toggleNode}
+                  onToggle={onToggle}
                   renderContent={(chunk, depth) => (
                     <span className="chunk-label" title={chunk.chunkName}>
                       {truncate(chunk.chunkName, 36 - depth * 2)}

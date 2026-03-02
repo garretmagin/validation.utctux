@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 import MiniGanttChart from "./MiniGanttChart";
 import TreeView from "./CssTree";
@@ -85,7 +86,15 @@ function formatDateTime(value: string | null): string {
   }
 }
 
-function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
+function DependenciesTable({
+  chunks,
+  collapsedNodes,
+  onToggle,
+}: {
+  chunks: ChunkAvailabilityDto[];
+  collapsedNodes: Set<string>;
+  onToggle: (key: string) => void;
+}) {
   if (!chunks || chunks.length === 0) {
     return (
       <div style={{ fontStyle: "italic", color: "#999", fontSize: "13px" }}>
@@ -110,6 +119,8 @@ function DependenciesTable({ chunks }: { chunks: ChunkAvailabilityDto[] }) {
         items={chunks}
         getChildren={(c) => c.subDependencies ?? []}
         className="deps-tree"
+        collapsedNodes={collapsedNodes}
+        onToggle={onToggle}
         renderContent={(chunk, depth) => {
           const delta = formatDelta(chunk.availableAfterBuildStart);
           return (
@@ -197,14 +208,33 @@ export default function TestpassDetailPanel({
   testpass,
   buildRegistrationDate,
 }: TestpassDetailPanelProps) {
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+  const toggleNode = useCallback((key: string) => {
+    setCollapsedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   return (
     <div style={panelStyle}>
       <div style={tableContainerStyle}>
-        <DependenciesTable chunks={testpass.dependentChunks} />
+        <DependenciesTable
+          chunks={testpass.dependentChunks}
+          collapsedNodes={collapsedNodes}
+          onToggle={toggleNode}
+        />
         <RunsTable runs={testpass.runs} />
       </div>
       <div style={ganttContainerStyle}>
-        <MiniGanttChart testpass={testpass} buildRegistrationDate={buildRegistrationDate} />
+        <MiniGanttChart
+          testpass={testpass}
+          buildRegistrationDate={buildRegistrationDate}
+          collapsedNodes={collapsedNodes}
+          onToggle={toggleNode}
+        />
       </div>
     </div>
   );

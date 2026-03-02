@@ -176,6 +176,16 @@ export default function TestpassTable({
     });
   }, []);
 
+  const [copiedName, setCopiedName] = useState<string | null>(null);
+  const handleCopyLink = useCallback((e: React.MouseEvent, name: string) => {
+    e.stopPropagation();
+    const url = new URL(window.location.href);
+    url.searchParams.set("TestpassName", name);
+    navigator.clipboard.writeText(url.toString());
+    setCopiedName(name);
+    setTimeout(() => setCopiedName(null), 2000);
+  }, []);
+
   const sorted = useMemo(() => {
     return [...testpasses].sort((a, b) => {
       if (!a.startTime && !b.startTime) return 0;
@@ -246,6 +256,17 @@ export default function TestpassTable({
                       }}
                     >
                       {tp.result || "Unknown"}
+                    </span>
+                    <span
+                      title={copiedName === tp.name ? "Copied!" : "Copy link to testpass"}
+                      style={{ cursor: "pointer", color: copiedName === tp.name ? "#107c10" : "#888", display: "inline-flex", marginLeft: "4px" }}
+                      onClick={(e) => handleCopyLink(e, tp.name)}
+                    >
+                      {copiedName === tp.name ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#107c10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      )}
                     </span>
                   </div>
                 </td>

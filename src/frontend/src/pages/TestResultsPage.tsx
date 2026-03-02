@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Header, TitleSize } from "azure-devops-ui/Header";
 import { Card } from "azure-devops-ui/Card";
 import { ZeroData, ZeroDataActionType } from "azure-devops-ui/ZeroData";
@@ -35,6 +35,8 @@ let expandCounter = 0;
 export default function TestResultsPage() {
   const { fqbn } = useParams<{ fqbn?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const testpassNameParam = searchParams.get("TestpassName");
   const authFetch = useAuthFetch();
   const { status, progress, results, error, isTimeout, refresh } = useTestResults(fqbn, authFetch);
   const [filters, setFilters] = useState<TestResultsFilters>({
@@ -48,6 +50,13 @@ export default function TestResultsPage() {
   const onGanttBarClick = useCallback((name: string) => {
     setExpandTestpass(`${name}\0${++expandCounter}`);
   }, []);
+
+  // Auto-expand testpass from URL query parameter after loading completes
+  useEffect(() => {
+    if (status === "completed" && testpassNameParam) {
+      setExpandTestpass(`${testpassNameParam}\0${++expandCounter}`);
+    }
+  }, [status, testpassNameParam]);
 
   const filteredTestpasses = useMemo(() => {
     if (!results?.testpasses) return [];

@@ -257,40 +257,46 @@ export default function BuildSelector({
       items.push({
         id: build.fqbn,
         text: displayName,
-        render: (_rowIndex, _colIndex, _tableColumn, _tableItem) => (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              width: "100%",
-              padding: "6px 8px",
-              cursor: "pointer",
-            }}
-          >
-            <ExpandableBadge
-              buildType={build.buildType}
-              childCount={hasChildren ? build.relatedBuilds.length : 0}
-              isExpanded={isExpanded}
-              onToggle={() => {
-                setExpandedChains(prev => {
-                  const next = new Set(prev);
-                  if (next.has(build.fqbn)) next.delete(build.fqbn);
-                  else next.add(build.fqbn);
-                  return next;
-                });
+        render: (rowIndex, colIndex, tableColumn, tableItem) => {
+          void rowIndex;
+          void colIndex;
+          void tableColumn;
+          void tableItem;
+          return (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                width: "100%",
+                padding: "6px 8px",
+                cursor: "pointer",
               }}
-            />
-            <span style={{ flex: 1 }}>
-              {displayName}
-              {hasChildren && !isExpanded && (
-                <span style={{ marginLeft: "6px", fontSize: "0.8em", color: "#888" }}>
-                  +{build.relatedBuilds.length}
-                </span>
-              )}
-            </span>
-            <NLabel label={nLabel} />
-          </div>
-        ),
+            >
+              <ExpandableBadge
+                buildType={build.buildType}
+                childCount={hasChildren ? build.relatedBuilds.length : 0}
+                isExpanded={isExpanded}
+                onToggle={() => {
+                  setExpandedChains(prev => {
+                    const next = new Set(prev);
+                    if (next.has(build.fqbn)) next.delete(build.fqbn);
+                    else next.add(build.fqbn);
+                    return next;
+                  });
+                }}
+              />
+              <span style={{ flex: 1 }}>
+                {displayName}
+                {hasChildren && !isExpanded && (
+                  <span style={{ marginLeft: "6px", fontSize: "0.8em", color: "#888" }}>
+                    +{build.relatedBuilds.length}
+                  </span>
+                )}
+              </span>
+              <NLabel label={nLabel} />
+            </div>
+          );
+        },
       });
 
       // Insert expanded children
@@ -300,20 +306,26 @@ export default function BuildSelector({
           items.push({
             id: child.fqbn,
             text: childDisplay,
-            render: (_rowIndex, _colIndex, _tableColumn, _tableItem) => (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  width: "100%",
-                  padding: "6px 8px",
-                  paddingLeft: "36px",
-                }}
-              >
-                <span style={badgeBase}>{child.buildType ?? "?"}</span>
-                <span>{childDisplay}</span>
-              </div>
-            ),
+            render: (rowIndex, colIndex, tableColumn, tableItem) => {
+              void rowIndex;
+              void colIndex;
+              void tableColumn;
+              void tableItem;
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    width: "100%",
+                    padding: "6px 8px",
+                    paddingLeft: "36px",
+                  }}
+                >
+                  <span style={badgeBase}>{child.buildType ?? "?"}</span>
+                  <span>{childDisplay}</span>
+                </div>
+              );
+            },
           });
         }
       }

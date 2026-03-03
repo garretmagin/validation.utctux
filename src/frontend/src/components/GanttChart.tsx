@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useCallback } from "react";
 import { Card } from "azure-devops-ui/Card";
 import type { TestpassDto } from "../types/testResults";
+import { parseDotNetTimeSpanToSeconds } from "../utils/timeFormatting";
 import "./GanttChart.css";
 
 const DEFAULT_LABEL_WIDTH = 280;
@@ -13,27 +14,6 @@ interface GanttChartProps {
   onBarClick?: (testpassName: string) => void;
   buildStartTime?: string | null;
   buildRestartTimes?: string[];
-}
-
-function parseDuration(duration: string): number {
-  // Parse .NET TimeSpan format: "HH:MM:SS" or "D.HH:MM:SS" or "HH:MM:SS.fff"
-  const parts = duration.split(":");
-  if (parts.length < 2) return 0;
-
-  let hours = 0;
-  let minutes = 0;
-  let seconds = 0;
-
-  if (parts[0].includes(".")) {
-    const [days, h] = parts[0].split(".");
-    hours = parseInt(days, 10) * 24 + parseInt(h, 10);
-  } else {
-    hours = parseInt(parts[0], 10);
-  }
-  minutes = parseInt(parts[1], 10);
-  seconds = parseFloat(parts[2] ?? "0");
-
-  return hours * 3600 + minutes * 60 + seconds;
 }
 
 function formatDuration(seconds: number): string {
@@ -201,8 +181,8 @@ function TimelineRuler({
           }}
         />
         {/* Build restart markers */}
-        {restartPercents?.map((pct, i) => (
-          <span key={`restart-${i}`}>
+        {restartPercents?.map((pct) => (
+          <span key={`restart-${pct.toFixed(3)}`}>
             {!bottom && (
               <span
                 style={{
@@ -321,8 +301,10 @@ function GanttBar({
                   if (!a.availableAt) return 1;
                   if (!b.availableAt) return -1;
                   return new Date(a.availableAt).getTime() - new Date(b.availableAt).getTime();
-                }).map((chunk, ci) => (
-                  <div key={ci} className="gantt-tooltip-chunk">
+                }).map((chunk) => {
+                  const chunkKey = `${chunk.chunkName}-${chunk.availableAt ?? "no-available"}-${chunk.startedAt ?? "no-started"}-${chunk.flavor ?? "no-flavor"}`;
+                  return (
+                  <div key={chunkKey} className="gantt-tooltip-chunk">
                     <span className="gantt-tooltip-chunk-name">{chunk.chunkName}</span>
                     <span className="gantt-tooltip-chunk-detail">
                       {chunk.availableAt ? formatTime(chunk.availableAt) : "—"}
@@ -337,7 +319,8 @@ function GanttBar({
                           : ""}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
@@ -523,7 +506,7 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
 
         {/* Gantt rows */}
         <div className="gantt-rows">
-          {sortedTestpasses.map((tp, i) => {
+          {sortedTestpasses.map((tp) => {
             const startMs = new Date(tp.startTime!).getTime();
             const endMs = tp.endTime
               ? new Date(tp.endTime).getTime()
@@ -534,16 +517,16 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
               ((endMs - startMs) / 1000 / totalSeconds) * 100;
             widthPercent = Math.max(widthPercent, 0.5);
 
-            const durationSeconds = tp.duration
-              ? parseDuration(tp.duration)
-              : (endMs - startMs) / 1000;
+            const parsedDuration = parseDotNetTimeSpanToSeconds(tp.duration);
+            const durationSeconds = parsedDuration ?? (endMs - startMs) / 1000;
             const durationText =
               durationSeconds >= 60 ? formatDuration(durationSeconds) : "";
 
             const esClass = getEsClass(tp);
+            const rowKey = `${tp.name}-${tp.startTime ?? "nostart"}-${tp.executionSystem ?? "nosystem"}`;
 
             return (
-              <div className="gantt-row" key={`${tp.name}-${i}`}>
+              <div className="gantt-row" key={rowKey}>
                 <div
                   className="gantt-label"
                   title={tp.name}

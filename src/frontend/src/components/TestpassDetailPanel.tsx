@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import type { TestpassDto, ChunkAvailabilityDto } from "../types/testResults";
 import MiniGanttChart from "./MiniGanttChart";
 import TreeView from "./CssTree";
+import { formatDateTime, parseDotNetTimeSpanToSeconds } from "../utils/timeFormatting";
 import "./TestpassDetailPanel.css";
 
 export interface TestpassDetailPanelProps {
@@ -51,40 +52,13 @@ const tdStyle: React.CSSProperties = {
 
 function formatDelta(timeSpanStr: string | null): { text: string; color: string } {
   if (!timeSpanStr) return { text: "—", color: "#999" };
-  // TimeSpan serializes as "HH:MM:SS" or "d.HH:MM:SS"
-  const parts = timeSpanStr.split(":");
-  if (parts.length < 2) return { text: timeSpanStr, color: "#009000" };
-
-  let hours = 0;
-  let minutes = 0;
-  // Handle "d.HH:MM:SS" format
-  const firstPart = parts[0];
-  if (firstPart.includes(".")) {
-    const [days, hrs] = firstPart.split(".");
-    hours = parseInt(days, 10) * 24 + parseInt(hrs, 10);
-  } else {
-    hours = parseInt(firstPart, 10);
-  }
-  minutes = parseInt(parts[1], 10);
-
+  const totalSeconds = parseDotNetTimeSpanToSeconds(timeSpanStr);
+  if (totalSeconds == null) return { text: timeSpanStr, color: "#009000" };
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   const text = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   return { text, color: "#009000" };
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "—";
-  try {
-    const d = new Date(value);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
-  } catch {
-    return value;
-  }
 }
 
 function DependenciesTable({
@@ -122,7 +96,7 @@ function DependenciesTable({
         className="deps-tree"
         collapsedNodes={collapsedNodes}
         onToggle={onToggle}
-        renderContent={(chunk, _depth) => {
+        renderContent={(chunk) => {
           const delta = formatDelta(chunk.availableAfterBuildStart);
           return (
             <span className="chunk-label deps-row">
@@ -161,8 +135,9 @@ function RunsTable({ runs }: { runs: TestpassDto[] }) {
           {runs.map((run, i) => {
             const isCurrent = i === 0;
             const rowBg = isCurrent ? "#eef6ff" : undefined;
+            const runKey = `${run.name}-${run.startTime ?? "nostart"}-${run.endTime ?? "noend"}-${run.detailsUrl ?? "nodetails"}-${run.rerunOwner ?? "noowner"}-${run.rerunReason ?? "noreason"}`;
             return (
-              <tr key={i} style={{ backgroundColor: rowBg }}>
+              <tr key={runKey} style={{ backgroundColor: rowBg }}>
                 <td style={tdStyle}>
                   {run.detailsUrl ? (
                     <a

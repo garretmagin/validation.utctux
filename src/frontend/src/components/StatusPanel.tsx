@@ -130,11 +130,12 @@ export default function StatusPanel({
               boxSizing: "border-box",
             }}
           >
-            {progress.map((msg, i) => {
+            {progress.map((msg) => {
               const isError = msg.message.startsWith("⚠");
+              const messageKey = `${msg.timestamp}-${msg.message}`;
               return (
                 <div
-                  key={i}
+                  key={messageKey}
                   className="flex-row"
                   style={{ gap: "8px", padding: "2px 0" }}
                 >

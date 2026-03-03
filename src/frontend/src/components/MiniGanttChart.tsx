@@ -17,6 +17,7 @@ const ROW_HEIGHT = 24;
 // box-sizing: border-box is active globally, so border is inside ROW_HEIGHT
 const ROW_PITCH = ROW_HEIGHT;
 const LABEL_WIDTH = 260;
+const MAX_CHUNK_DEPTH = 10;
 
 function formatTickTime(seconds: number): string {
   const hrs = Math.floor(seconds / 3600);
@@ -43,12 +44,21 @@ function parseTimeSpanToMs(ts: string | null): number | null {
   const firstPart = parts[0];
   if (firstPart.includes(".")) {
     const [days, hrs] = firstPart.split(".");
-    hours = parseInt(days, 10) * 24 + parseInt(hrs, 10);
+    const parsedDays = Number.parseInt(days, 10);
+    const parsedHours = Number.parseInt(hrs, 10);
+    if (Number.isNaN(parsedDays) || Number.isNaN(parsedHours)) return null;
+    hours = parsedDays * 24 + parsedHours;
   } else {
-    hours = parseInt(firstPart, 10);
+    const parsedHours = Number.parseInt(firstPart, 10);
+    if (Number.isNaN(parsedHours)) return null;
+    hours = parsedHours;
   }
-  minutes = parseInt(parts[1], 10);
-  if (parts.length >= 3) seconds = parseFloat(parts[2]);
+  minutes = Number.parseInt(parts[1], 10);
+  if (Number.isNaN(minutes)) return null;
+  if (parts.length >= 3) {
+    seconds = Number.parseFloat(parts[2]);
+    if (Number.isNaN(seconds)) return null;
+  }
   return (hours * 3600 + minutes * 60 + seconds) * 1000;
 }
 
@@ -202,19 +212,21 @@ const trackCellStyle: React.CSSProperties = {
 
 // --- Sub-components ---
 
+interface TestpassBarProps {
+  run: TestpassDto;
+  toPct: (ms: number) => number;
+  executionSystem: string;
+  isCurrent: boolean;
+  hasMultipleRuns: boolean;
+}
+
 function TestpassBar({
   run,
   toPct,
   executionSystem,
   isCurrent,
   hasMultipleRuns,
-}: {
-  run: TestpassDto;
-  toPct: (ms: number) => number;
-  executionSystem: string;
-  isCurrent: boolean;
-  hasMultipleRuns: boolean;
-}) {
+}: TestpassBarProps) {
   const { showTooltip, onTriggerEnter, onTriggerLeave, onTooltipEnter, onTooltipLeave, tooltipRef } = useTooltipCone();
   if (!run.startTime) return null;
 
@@ -227,8 +239,7 @@ function TestpassBar({
   const barColor = getBarColor(executionSystem, run.result, run.status);
   const isRunning = barColor === "running";
 
-  const label = isCurrent ? run.name : `${run.name}`;
-  const displayLabel = truncate(label, 100);
+  const displayLabel = truncate(run.name, 100);
 
   return (
     <div style={{ ...rowStyle, position: "relative" }}>
@@ -373,12 +384,14 @@ function flattenForTracks(
 
 // ChunkTreeLabels removed — using shared TreeView component instead
 
-function ChunkTrackRow({ chunk, barColor, barBorder, top }: {
+interface ChunkTrackRowProps {
   chunk: PreparedChunk;
   barColor: string;
   barBorder: string;
   top: number;
-}) {
+}
+
+function ChunkTrackRow({ chunk, barColor, barBorder, top }: ChunkTrackRowProps) {
   const { showTooltip, onTriggerEnter, onTriggerLeave, onTooltipEnter, onTooltipLeave, tooltipRef } = useTooltipCone();
   return (
     <div
@@ -481,8 +494,8 @@ export default function MiniGanttChart({
 
   const buildStart = buildRegistrationDate
     ? new Date(buildRegistrationDate).getTime()
-    : hasStartTime
-      ? new Date(testpass.startTime!).getTime()
+    : testpass.startTime
+      ? new Date(testpass.startTime).getTime()
       : Date.now();
 
   const tpEnd = testpass.endTime ? new Date(testpass.endTime).getTime() : Date.now();
@@ -495,7 +508,7 @@ export default function MiniGanttChart({
       if (avail != null) times.push(buildStart + avail);
       const started = parseTimeSpanToMs(c.startedAfterBuildStart);
       if (started != null) times.push(buildStart + started);
-      if (depth < 10 && c.subDependencies) {
+      if (depth < MAX_CHUNK_DEPTH && c.subDependencies) {
         times.push(...collectChunkTimesMs(c.subDependencies, depth + 1));
       }
     }
@@ -525,30 +538,32 @@ export default function MiniGanttChart({
   // --- Chunk data ---
 
   function prepareChunks(deps: ChunkAvailabilityDto[], depth: number): PreparedChunk[] {
-    return deps
-      .map((chunk) => {
-        const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
-        if (deltaMs == null) return null;
-        const startMs = parseTimeSpanToMs(chunk.startedAfterBuildStart);
-        const subDeps = depth < 10 && chunk.subDependencies
-          ? prepareChunks(chunk.subDependencies, depth + 1)
-          : [];
-        const durationMs2 = (startMs != null && deltaMs != null) ? deltaMs - startMs : null;
-        return {
-          chunkName: chunk.chunkName,
-          pct: toPct(buildStart + deltaMs),
-          deltaLabel: formatDeltaShort(deltaMs),
-          startPct: startMs != null ? toPct(buildStart + startMs) : undefined,
-          subDeps,
-          isCriticalPath: chunk.isCriticalPath ?? false,
-          startedAt: chunk.startedAt ?? null,
-          startedDeltaLabel: startMs != null ? formatDeltaShort(startMs) : null,
-          availableAt: chunk.availableAt ?? null,
-          durationLabel: durationMs2 != null && durationMs2 > 0 ? formatDurationLabel(durationMs2) : null,
-          mediaCreationUrl: chunk.mediaCreationUrl ?? null,
-        };
-      })
-      .filter(Boolean) as PreparedChunk[];
+    const prepared: PreparedChunk[] = [];
+    for (const chunk of deps) {
+      const deltaMs = parseTimeSpanToMs(chunk.availableAfterBuildStart);
+      if (deltaMs == null) continue;
+
+      const startMs = parseTimeSpanToMs(chunk.startedAfterBuildStart);
+      const subDeps = depth < MAX_CHUNK_DEPTH && chunk.subDependencies
+        ? prepareChunks(chunk.subDependencies, depth + 1)
+        : [];
+      const durationMs = startMs != null ? deltaMs - startMs : null;
+
+      prepared.push({
+        chunkName: chunk.chunkName,
+        pct: toPct(buildStart + deltaMs),
+        deltaLabel: formatDeltaShort(deltaMs),
+        startPct: startMs != null ? toPct(buildStart + startMs) : undefined,
+        subDeps,
+        isCriticalPath: chunk.isCriticalPath ?? false,
+        startedAt: chunk.startedAt ?? null,
+        startedDeltaLabel: startMs != null ? formatDeltaShort(startMs) : null,
+        availableAt: chunk.availableAt ?? null,
+        durationLabel: durationMs != null && durationMs > 0 ? formatDurationLabel(durationMs) : null,
+        mediaCreationUrl: chunk.mediaCreationUrl ?? null,
+      });
+    }
+    return prepared;
   }
 
   const chunks = prepareChunks(testpass.dependentChunks ?? [], 0);
@@ -588,14 +603,13 @@ export default function MiniGanttChart({
   const tickCount = ticks.length - 1;
 
   const hasChunks = chunks.length > 0;
+  const visibleTracks = hasChunks ? flattenForTracks(chunks, collapsedNodes) : [];
+  const totalChunkRows = visibleTracks.length;
 
   // Compute build restart positions as percentages
-  const restartPercents = (buildRestartTimes ?? [])
-    .map((t) => {
-      const ms = new Date(t).getTime();
-      return toPct(ms);
-    })
-    .filter((pct) => pct > 0 && pct < 100);
+  const restartMarkers = (buildRestartTimes ?? [])
+    .map((time) => ({ time, pct: toPct(new Date(time).getTime()) }))
+    .filter((marker) => marker.pct > 0 && marker.pct < 100);
 
   return (
     <div style={containerStyle}>
@@ -650,12 +664,12 @@ export default function MiniGanttChart({
             }}
           />
           {/* Build Restarted angled labels */}
-          {restartPercents.map((pct, i) => (
-            <span key={`restart-label-${i}`}>
+          {restartMarkers.map((marker) => (
+            <span key={marker.time}>
               <span
                 style={{
                   position: "absolute",
-                  left: `${pct.toFixed(1)}%`,
+                  left: `${marker.pct.toFixed(1)}%`,
                   transform: "rotate(-45deg)",
                   transformOrigin: "bottom left",
                   fontWeight: 600,
@@ -670,7 +684,7 @@ export default function MiniGanttChart({
               <span
                 style={{
                   position: "absolute",
-                  left: `${pct.toFixed(1)}%`,
+                  left: `${marker.pct.toFixed(1)}%`,
                   top: 0,
                   bottom: 0,
                   borderLeft: "2px dashed #004578",
@@ -697,46 +711,40 @@ export default function MiniGanttChart({
           >
             Dependencies
           </div>
-          {(() => {
-            const visibleTracks = flattenForTracks(chunks, collapsedNodes);
-            const totalRows = visibleTracks.length;
-            return (
-              <div style={{ position: "relative", display: "flex" }}>
-                {/* Label tree panel */}
-                <TreeView<PreparedChunk>
-                  items={chunks}
-                  getChildren={(c) => c.subDeps}
-                  collapsedNodes={collapsedNodes}
-                  onToggle={onToggle}
-                  renderContent={(chunk, depth) => (
-                    <span className="chunk-label" title={chunk.chunkName}>
-                      {truncate(chunk.chunkName, 36 - depth * 2)}
-                    </span>
-                  )}
-                  className="mini-gantt-labels"
+          <div style={{ position: "relative", display: "flex" }}>
+            {/* Label tree panel */}
+            <TreeView<PreparedChunk>
+              items={chunks}
+              getChildren={(c) => c.subDeps}
+              collapsedNodes={collapsedNodes}
+              onToggle={onToggle}
+              renderContent={(chunk, depth) => (
+                <span className="chunk-label" title={chunk.chunkName}>
+                  {truncate(chunk.chunkName, 36 - depth * 2)}
+                </span>
+              )}
+              className="mini-gantt-labels"
+            />
+            {/* Track bar panel */}
+            <div
+              style={{
+                flex: 1,
+                position: "relative",
+                height: `${totalChunkRows * ROW_PITCH}px`,
+                minWidth: 0,
+              }}
+            >
+              {visibleTracks.map((t, i) => (
+                <ChunkTrackRow
+                  key={t.key}
+                  chunk={t.chunk}
+                  barColor={t.barColor}
+                  barBorder={t.barBorder}
+                  top={i * ROW_PITCH}
                 />
-                {/* Track bar panel */}
-                <div
-                  style={{
-                    flex: 1,
-                    position: "relative",
-                    height: `${totalRows * ROW_PITCH}px`,
-                    minWidth: 0,
-                  }}
-                >
-                  {visibleTracks.map((t, i) => (
-                    <ChunkTrackRow
-                      key={t.key}
-                      chunk={t.chunk}
-                      barColor={t.barColor}
-                      barBorder={t.barBorder}
-                      top={i * ROW_PITCH}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
+              ))}
+            </div>
+          </div>
           {/* Divider between chunks and runs */}
           <div style={{ height: "1px", background: "#dedede", margin: "2px 0" }} />
         </>
@@ -757,16 +765,19 @@ export default function MiniGanttChart({
           >
             Execution
           </div>
-          {allRuns.map(({ run, isCurrent }, i) => (
-            <TestpassBar
-              key={i}
-              run={run}
-              toPct={toPct}
-              executionSystem={testpass.executionSystem}
-              isCurrent={isCurrent}
-              hasMultipleRuns={allRuns.length > 1}
-            />
-          ))}
+          {allRuns.map(({ run, isCurrent }, i) => {
+            const runKey = `${run.name}-${run.startTime ?? "nostart"}-${run.endTime ?? "noend"}-${isCurrent ? "current" : "rerun"}-${i}`;
+            return (
+              <TestpassBar
+                key={runKey}
+                run={run}
+                toPct={toPct}
+                executionSystem={testpass.executionSystem}
+                isCurrent={isCurrent}
+                hasMultipleRuns={allRuns.length > 1}
+              />
+            );
+          })}
         </>
       )}
 
@@ -791,7 +802,7 @@ export default function MiniGanttChart({
                 : "translateX(-50%)";
             return (
               <span
-                key={i}
+                key={`${tick.label}-${tick.pct.toFixed(3)}`}
                 style={{
                   position: "absolute",
                   top: "2px",

@@ -3,6 +3,7 @@ import { Status, Statuses, StatusSize } from "azure-devops-ui/Status";
 import { Icon } from "azure-devops-ui/Icon";
 import type { TestpassDto } from "../types/testResults";
 import TestpassDetailPanel from "./TestpassDetailPanel";
+import { formatDateTime, parseDotNetTimeSpanToSeconds } from "../utils/timeFormatting";
 
 export interface TestpassTableProps {
   testpasses: TestpassDto[];
@@ -42,46 +43,21 @@ function getStatusProps(result: string) {
   }
 }
 
-function formatDateTime(value: string | null): string {
-  if (!value) return "—";
-  try {
-    const d = new Date(value);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
-  } catch {
-    return value;
-  }
-}
-
 function formatDuration(value: string | null): string {
   if (!value) return "\u2014";
-  // Parse .NET TimeSpan: "HH:MM:SS", "D.HH:MM:SS", or "HH:MM:SS.fff"
-  const parts = value.split(":");
-  if (parts.length < 2) return value;
+  const parsedSeconds = parseDotNetTimeSpanToSeconds(value);
+  if (parsedSeconds == null) return value;
 
-  let hours = 0;
-  let minutes = 0;
-  let seconds = 0;
-
-  if (parts[0].includes(".")) {
-    const [days, h] = parts[0].split(".");
-    hours = parseInt(days, 10) * 24 + parseInt(h, 10);
-  } else {
-    hours = parseInt(parts[0], 10);
-  }
-  minutes = parseInt(parts[1], 10);
-  seconds = Math.round(parseFloat(parts[2] ?? "0"));
+  const seconds = Math.round(parsedSeconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
 
   if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
   if (hours > 0) return `${hours}h`;
-  if (minutes > 0 && seconds > 0) return `${minutes}m ${seconds}s`;
+  if (minutes > 0 && remainingSeconds > 0) return `${minutes}m ${remainingSeconds}s`;
   if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
+  return `${remainingSeconds}s`;
 }
 
 function formatOffset(value: string | null, buildStart: string | null): React.ReactNode {
@@ -126,6 +102,10 @@ const cellStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+function getTestpassRowKey(testpass: TestpassDto): string {
+  return `${testpass.name}::${testpass.startTime ?? "nostart"}::${testpass.executionSystem ?? "nosystem"}`;
+}
+
 export default function TestpassTable({
   testpasses,
   buildRegistrationDate,
@@ -136,20 +116,33 @@ export default function TestpassTable({
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
   const detailRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
+  const sorted = useMemo(() => {
+    return [...testpasses].sort((a, b) => {
+      if (!a.startTime && !b.startTime) return 0;
+      if (!a.startTime) return 1;
+      if (!b.startTime) return -1;
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    });
+  }, [testpasses]);
+
   useEffect(() => {
     if (!expandTestpass) return;
     const name = expandTestpass.split("\0")[0];
+    const matchedTestpass = sorted.find((tp) => tp.name === name);
+    if (!matchedTestpass) return;
+    const rowKey = getTestpassRowKey(matchedTestpass);
+
     setExpandedRows((prev) => {
-      if (prev.has(name)) return prev;
+      if (prev.has(rowKey)) return prev;
       const next = new Set(prev);
-      next.add(name);
+      next.add(rowKey);
       return next;
     });
     // Double rAF to wait for the detail panel to render
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const mainRow = rowRefs.current.get(name);
-        const detailRow = detailRowRefs.current.get(name);
+        const mainRow = rowRefs.current.get(rowKey);
+        const detailRow = detailRowRefs.current.get(rowKey);
         if (mainRow && detailRow) {
           const detailRect = detailRow.getBoundingClientRect();
           const mainRect = mainRow.getBoundingClientRect();
@@ -164,15 +157,15 @@ export default function TestpassTable({
         }
       });
     });
-  }, [expandTestpass]);
+  }, [expandTestpass, sorted]);
 
-  const toggleExpand = useCallback((name: string) => {
+  const toggleExpand = useCallback((rowKey: string) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) {
-        next.delete(name);
+      if (next.has(rowKey)) {
+        next.delete(rowKey);
       } else {
-        next.add(name);
+        next.add(rowKey);
       }
       return next;
     });
@@ -187,15 +180,6 @@ export default function TestpassTable({
     setCopiedName(name);
     setTimeout(() => setCopiedName(null), 2000);
   }, []);
-
-  const sorted = useMemo(() => {
-    return [...testpasses].sort((a, b) => {
-      if (!a.startTime && !b.startTime) return 0;
-      if (!a.startTime) return 1;
-      if (!b.startTime) return -1;
-      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-    });
-  }, [testpasses]);
 
   return (
     <table
@@ -216,16 +200,20 @@ export default function TestpassTable({
       </thead>
       <tbody>
         {sorted.map((tp) => {
-          const isExpanded = expandedRows.has(tp.name);
+          const rowKey = getTestpassRowKey(tp);
+          const isExpanded = expandedRows.has(rowKey);
           const hasDetails =
             (tp.runs && tp.runs.length > 0) ||
             (tp.dependentChunks && tp.dependentChunks.length > 0);
           return (
-            <Fragment key={tp.name}>
+            <Fragment key={rowKey}>
               <tr
-                ref={(el) => { if (el) rowRefs.current.set(tp.name, el); }}
+                ref={(el) => {
+                  if (el) rowRefs.current.set(rowKey, el);
+                  else rowRefs.current.delete(rowKey);
+                }}
                 style={{ cursor: hasDetails ? "pointer" : undefined }}
-                onClick={hasDetails ? () => toggleExpand(tp.name) : undefined}
+                onClick={hasDetails ? () => toggleExpand(rowKey) : undefined}
               >
                 <td style={{ ...cellStyle, textAlign: "center", width: "30px", padding: "8px 4px" }}>
                   {hasDetails && (
@@ -331,7 +319,12 @@ export default function TestpassTable({
                 <td style={cellStyle}>{formatDuration(tp.duration) ?? "\u2014"}</td>
               </tr>
               {isExpanded && (
-                <tr ref={(el) => { if (el) detailRowRefs.current.set(tp.name, el); else detailRowRefs.current.delete(tp.name); }}>
+                <tr
+                  ref={(el) => {
+                    if (el) detailRowRefs.current.set(rowKey, el);
+                    else detailRowRefs.current.delete(rowKey);
+                  }}
+                >
                   <td colSpan={COLUMN_COUNT} style={{ padding: 0 }}>
                     <TestpassDetailPanel
                       testpass={tp}

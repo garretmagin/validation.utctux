@@ -5,6 +5,7 @@ export interface TestResultsFilters {
   requirement: string | null;
   status: string | null;
   scope: string | null;
+  nameFilter: string;
 }
 
 export interface ResultsFiltersProps {
@@ -16,6 +17,7 @@ const INITIAL_FILTERS: TestResultsFilters = {
   requirement: "Required",
   status: null,
   scope: "Global",
+  nameFilter: "",
 };
 
 interface ToggleGroupProps {
@@ -132,6 +134,60 @@ export default function ResultsFilters({
         value={filters.scope}
         onChange={(v) => update({ scope: v })}
       />
+      <div className="flex-row flex-center" style={{ gap: "4px" }}>
+        <span
+          style={{
+            fontWeight: 600,
+            fontSize: "12px",
+            marginRight: "4px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Name:
+        </span>
+        <div style={{ position: "relative", width: "180px" }}>
+          <input
+            type="text"
+            placeholder="Filter by name…"
+            value={filters.nameFilter}
+            onChange={(e) => update({ nameFilter: e.target.value })}
+            style={{
+              padding: "4px 10px",
+              paddingRight: "24px",
+              borderRadius: "12px",
+              border: "1px solid var(--palette-neutral-30, #ccc)",
+              fontSize: "12px",
+              lineHeight: "16px",
+              width: "100%",
+              outline: "none",
+              background: "transparent",
+              color: "var(--text-primary-color, inherit)",
+              boxSizing: "border-box",
+            }}
+          />
+          {filters.nameFilter && (
+            <button
+              onClick={() => update({ nameFilter: "" })}
+              aria-label="Clear name filter"
+              style={{
+                position: "absolute",
+                right: "6px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "0 2px",
+                fontSize: "14px",
+                lineHeight: 1,
+                color: "var(--text-secondary-color, #999)",
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

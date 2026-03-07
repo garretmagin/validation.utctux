@@ -44,6 +44,7 @@ export default function TestResultsPage() {
     requirement: "Required",
     status: null,
     scope: "Global",
+    nameFilter: "",
   });
   const [expandTestpass, setExpandTestpass] = useState<string | null>(null);
 
@@ -74,6 +75,7 @@ export default function TestResultsPage() {
         return false;
       if (filters.status && !matchesStatus(tp, filters.status)) return false;
       if (filters.scope && tp.scope?.toLowerCase() !== filters.scope.toLowerCase()) return false;
+      if (filters.nameFilter && !tp.name?.toLowerCase().includes(filters.nameFilter.toLowerCase())) return false;
       return true;
     });
   }, [results?.testpasses, filters]);

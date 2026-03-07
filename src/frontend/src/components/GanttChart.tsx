@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useCallback } from "react";
 import { Card } from "azure-devops-ui/Card";
 import type { TestpassDto } from "../types/testResults";
 import { parseDotNetTimeSpanToSeconds } from "../utils/timeFormatting";
+import type { SortField, SortDirection } from "../pages/TestResultsPage";
 import "./GanttChart.css";
 
 const DEFAULT_LABEL_WIDTH = 280;
@@ -14,7 +15,16 @@ interface GanttChartProps {
   onBarClick?: (testpassName: string) => void;
   buildStartTime?: string | null;
   buildRestartTimes?: string[];
+  sortField: SortField;
+  sortDirection: SortDirection;
+  onSortChange: (field: SortField) => void;
 }
+
+const SORT_FIELDS: { key: SortField; label: string }[] = [
+  { key: "startTime", label: "Start time" },
+  { key: "endTime", label: "End time" },
+  { key: "duration", label: "Duration" },
+];
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -95,12 +105,18 @@ function TimelineRuler({
   firstTestPercent,
   firstTestLabel,
   restartPercents,
+  sortField,
+  sortDirection,
+  onSortChange,
 }: {
   totalSeconds: number;
   bottom?: boolean;
   firstTestPercent?: number;
   firstTestLabel?: string;
   restartPercents?: number[];
+  sortField?: SortField;
+  sortDirection?: SortDirection;
+  onSortChange?: (field: SortField) => void;
 }) {
   const step = calculateTickStep(totalSeconds);
   const marks = [];
@@ -121,7 +137,40 @@ function TimelineRuler({
     <div
       className={`gantt-timeline-ruler${bottom ? " bottom" : ""}`}
     >
-      <div className="gantt-timeline-spacer" />
+      <div className="gantt-timeline-spacer">
+        {!bottom && sortField && sortDirection && onSortChange && (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", height: "100%" }}>
+            {SORT_FIELDS.map((sf, i) => (
+              <span key={sf.key} style={{ display: "inline-flex", alignItems: "center" }}>
+                {i > 0 && <span style={{ color: "#ccc", margin: "0 2px" }}>|</span>}
+                <button
+                  onClick={() => onSortChange(sf.key)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "2px 4px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                    fontWeight: sortField === sf.key ? 600 : 400,
+                    color: sortField === sf.key
+                      ? "var(--communication-background, #0078d4)"
+                      : "var(--text-secondary-color, #666)",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`Sort by ${sf.label}`}
+                >
+                  {sf.label}
+                  {sortField === sf.key && (
+                    <span style={{ marginLeft: "2px" }}>
+                      {sortDirection === "asc" ? "▲" : "▼"}
+                    </span>
+                  )}
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="gantt-timeline-track">
         {!bottom && (
           <span
@@ -338,7 +387,7 @@ function GanttBar({
   );
 }
 
-export default function GanttChart({ testpasses, timeRange, onBarClick, buildStartTime, buildRestartTimes }: GanttChartProps) {
+export default function GanttChart({ testpasses, timeRange, onBarClick, buildStartTime, buildRestartTimes, sortField, sortDirection, onSortChange }: GanttChartProps) {
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -379,13 +428,32 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
   );
 
   const sortedTestpasses = useMemo(() => {
-    return [...testpasses]
-      .filter((tp) => tp.startTime != null)
-      .sort(
-        (a, b) =>
-          new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime()
-      );
-  }, [testpasses]);
+    const withStart = [...testpasses].filter((tp) => tp.startTime != null);
+    return withStart.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "startTime":
+          cmp = new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime();
+          break;
+        case "endTime": {
+          const aEnd = a.endTime ? new Date(a.endTime).getTime() : 0;
+          const bEnd = b.endTime ? new Date(b.endTime).getTime() : 0;
+          if (!a.endTime && !b.endTime) cmp = 0;
+          else if (!a.endTime) cmp = 1;
+          else if (!b.endTime) cmp = -1;
+          else cmp = aEnd - bEnd;
+          break;
+        }
+        case "duration": {
+          const aDur = parseDotNetTimeSpanToSeconds(a.duration) ?? 0;
+          const bDur = parseDotNetTimeSpanToSeconds(b.duration) ?? 0;
+          cmp = aDur - bDur;
+          break;
+        }
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [testpasses, sortField, sortDirection]);
 
   // Compute first test marker position
   const firstTestStartMs = sortedTestpasses.length > 0
@@ -502,6 +570,9 @@ export default function GanttChart({ testpasses, timeRange, onBarClick, buildSta
           firstTestPercent={firstTestPercent}
           firstTestLabel={firstTestLabel}
           restartPercents={restartPercents}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          onSortChange={onSortChange}
         />
 
         {/* Gantt rows */}

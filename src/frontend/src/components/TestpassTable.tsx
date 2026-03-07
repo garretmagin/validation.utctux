@@ -4,12 +4,15 @@ import { Icon } from "azure-devops-ui/Icon";
 import type { TestpassDto } from "../types/testResults";
 import TestpassDetailPanel from "./TestpassDetailPanel";
 import { formatDateTime, parseDotNetTimeSpanToSeconds } from "../utils/timeFormatting";
+import type { SortField, SortDirection } from "../pages/TestResultsPage";
 
 export interface TestpassTableProps {
   testpasses: TestpassDto[];
   buildRegistrationDate: string | null;
   buildRestartTimes?: string[];
   expandTestpass?: string | null;
+  sortField: SortField;
+  sortDirection: SortDirection;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -111,6 +114,8 @@ export default function TestpassTable({
   buildRegistrationDate,
   buildRestartTimes,
   expandTestpass,
+  sortField,
+  sortDirection,
 }: TestpassTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -118,15 +123,36 @@ export default function TestpassTable({
 
   const sorted = useMemo(() => {
     return [...testpasses].sort((a, b) => {
-      if (!a.startTime && !b.startTime) return 0;
-      if (!a.startTime) return 1;
-      if (!b.startTime) return -1;
-      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+      let cmp = 0;
+      switch (sortField) {
+        case "startTime":
+          if (!a.startTime && !b.startTime) cmp = 0;
+          else if (!a.startTime) cmp = 1;
+          else if (!b.startTime) cmp = -1;
+          else cmp = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+          break;
+        case "endTime":
+          if (!a.endTime && !b.endTime) cmp = 0;
+          else if (!a.endTime) cmp = 1;
+          else if (!b.endTime) cmp = -1;
+          else cmp = new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
+          break;
+        case "duration": {
+          const aDur = parseDotNetTimeSpanToSeconds(a.duration) ?? 0;
+          const bDur = parseDotNetTimeSpanToSeconds(b.duration) ?? 0;
+          cmp = aDur - bDur;
+          break;
+        }
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
     });
-  }, [testpasses]);
+  }, [testpasses, sortField, sortDirection]);
+
+  const lastExpandRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!expandTestpass) return;
+    if (!expandTestpass || expandTestpass === lastExpandRef.current) return;
+    lastExpandRef.current = expandTestpass;
     const name = expandTestpass.split("\0")[0];
     const matchedTestpass = sorted.find((tp) => tp.name === name);
     if (!matchedTestpass) return;

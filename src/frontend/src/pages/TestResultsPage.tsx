@@ -14,6 +14,15 @@ import type { TestpassDto } from "../types/testResults";
 import { useTestResults } from "../hooks/useTestResults";
 import { useAuthFetch } from "../auth/useAuthFetch";
 
+export type SortField = "startTime" | "endTime" | "duration";
+export type SortDirection = "asc" | "desc";
+
+const DEFAULT_SORT_DIRECTIONS: Record<SortField, SortDirection> = {
+  startTime: "asc",
+  endTime: "desc",
+  duration: "desc",
+};
+
 function matchesStatus(tp: TestpassDto, statusFilter: string): boolean {
   const s = tp.status?.toLowerCase() ?? "";
   const r = tp.result?.toLowerCase() ?? "";
@@ -47,6 +56,17 @@ export default function TestResultsPage() {
     nameFilter: "",
   });
   const [expandTestpass, setExpandTestpass] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>("startTime");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const onSortChange = useCallback((field: SortField) => {
+    if (field === sortField) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection(DEFAULT_SORT_DIRECTIONS[field]);
+    }
+  }, [sortField]);
 
   const onGanttBarClick = useCallback((name: string) => {
     setExpandTestpass(`${name}\0${++expandCounter}`);
@@ -148,11 +168,14 @@ export default function TestResultsPage() {
                 onBarClick={onGanttBarClick}
                 buildStartTime={results.buildInfo.buildStartTime}
                 buildRestartTimes={results.buildInfo.buildRestartTimes}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSortChange={onSortChange}
               />
             </div>
 
             <Card className="flex-grow margin-top-16">
-              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.buildStartTime} buildRestartTimes={results.buildInfo.buildRestartTimes} expandTestpass={expandTestpass} />
+              <TestpassTable testpasses={filteredTestpasses} buildRegistrationDate={results.buildInfo.buildStartTime} buildRestartTimes={results.buildInfo.buildRestartTimes} expandTestpass={expandTestpass} sortField={sortField} sortDirection={sortDirection} />
             </Card>
           </>
         )}

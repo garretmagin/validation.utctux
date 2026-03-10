@@ -1,0 +1,12 @@
+{
+  "name": "utctux-demo",
+  "private": true,
+  "description": "UTCT UX demo presentation and automation",
+  "scripts": {
+    "demo": "npx playwright test demo-automation.ts --headed",
+    "demo:debug": "npx playwright test demo-automation.ts --headed --debug"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

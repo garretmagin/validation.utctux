@@ -1,68 +1,60 @@
 # UTCT UX Demo — Narration Transcript
 
-**Total runtime target: ~3:00–3:30**
+**Total runtime target: ~2:00**
 
 ---
 
-## [0:00–0:08] Title Slide
+## [0:00–0:06] Title Slide
 
-> This is UTCT UX — a tool we built to visualize Windows test execution and help teams accelerate their test signal.
+> Hi, I'm Garret's AI assistant, presenting UTCT UX — a tool we built to visualize Windows test execution and help teams accelerate their test signal.
 
 ---
 
-## [0:08–0:40] Slide 1 — The Problem
+## [0:06–0:26] Slide 1 — The Problem
 
 > This started with a real conversation. A team told us that most of their RI gate tests take twelve-plus hours to run. Instinctively, that didn't sound right — but we had no data at our fingertips to show otherwise.
 >
-> The slide shows three challenges we faced. First, there was simply no visibility — no tool existed to see when tests actually start and finish relative to a build. Second, we were asking the wrong question — is the bottleneck test *runtime*, or the time tests spend *waiting* for build artifacts? And third, without that data, optimization is just guesswork.
+> The slide shows three challenges we faced. First, no visualization — we had the data, and we regularly look at aggregate metrics and delivery impact, but there was no way to see the timeline of individual test execution relative to a build. Second, we were asking the wrong question — is the bottleneck test *runtime*, or the time tests spend *waiting* for build artifacts? And third, we can measure what we optimize, but the visualization helps direct us to the right long poles — the ones that impact customers most in making their code flow decisions.
 
 ---
 
-## [0:40–1:15] Slide 2 — AI-Accelerated Development
+## [0:26–0:46] Slide 2 — AI-Accelerated Development
 
-> This slide shows the journey from that conversation to a deployed tool. With GitHub Copilot as a development partner, we had a working Gantt chart prototype in several hours stictching datasources together. After showing it to a few people, the demand was immediate — teams wanted to generate these views for their own branches. Within a week, it evolved into a full web application available at ux.utct.dev. During FHL week, we enhanced it with dependency analysis and critical-path visualization.
+> With GitHub Copilot as a development partner, we had a working Gantt chart prototype in a single day stitching datasources together. After showing it to a few ES engineers, the demand was immediate — they wanted it for investigating customer builds. So within a week we stood up a shared web service at ux.utct.dev. During FHL week, we polished the experience and added dependency analysis, critical-path visualization, and rerun detection.
 >
-> The key takeaway here: AI kept the focus on solving the problem, not building infrastructure. Instead of weeks of scaffolding, we spent our time on the visualizations and insights that actually matter.
+> AI kept the focus on solving the problem, not building infrastructure.
 
 ---
 
-## [1:15–1:25] Transition to Live Demo
+## [0:46–1:04] Slide 3 — First Discovery
+
+> The tool paid off immediately. The very first time we looked at a customer branch, one testpass jumped out — a bar stretching across the entire chart, sometimes running for 24 hours. It wasn't test complexity — it was a device pool capacity problem.
+>
+> The fix was straightforward: move those AutoPlus testpasses to a standard shared automation pool. The bottleneck disappeared. Without the visualization, this would have stayed hidden in aggregate metrics.
+
+---
+
+## [1:04–1:10] Transition to Live Demo
 
 > Let me show you what that looks like. This is the live site at ux.utct.dev.
 
 ---
 
-## [1:25–1:55] Live Demo — Build Selection & Loading
+## [1:10–1:25] Live Demo — Build Selection & Loading
 
-> First, we select a branch — in this case, main — and pick a recent build to analyze. The tool reaches out to multiple data sources across UTCT, CloudTest, and Nova to assemble a complete picture of every testpass in this build. You can see the progress updating in real time as it gathers data.
-
----
-
-## [1:55–2:30] Live Demo — The Gantt Chart
-
-> Here's the Gantt chart. Each horizontal bar represents a single testpass — when it started and when it ended, all measured relative to when the build began. The bars are color-coded by execution system.
->
-> This is where the data tells a different story than what that team expected. The majority of testpasses actually start within the first few hours. The perception of twelve-plus hours comes from a handful of late-starting tests — and now that we can see them, we can ask the right question: why did *these* tests start late?
->
-> Above the chart, the summary dashboard breaks down totals by execution system, requirement category, and status — giving teams and leadership a single view of test health for any build.
+> We select a branch and pick a recent build. The tool reaches out to UTCT, CloudTest, and Nova to assemble a complete picture of every testpass in this build.
 
 ---
 
-## [2:30–3:05] Live Demo — Dependency Deep Dive
+## [1:25–1:45] Live Demo — The Gantt Chart
 
-> Let's click on one of those late-starting testpasses to understand what's happening. The detail panel shows every build artifact — every chunk — that this test depends on before it can begin.
->
-> The red-highlighted path shows the critical dependency chain — the slowest sequence of artifacts that determined when this test could start. For this testpass, it comes down to just a couple of key chunks.
->
-> This is the actionable insight: if we can produce those specific artifacts even a few minutes sooner, this entire testpass starts earlier. Now multiply that across dozens of testpasses with similar bottlenecks, and you see how targeted improvements to artifact production translate directly into faster test signal for the whole organization.
+> Each horizontal bar represents a testpass — when it started and ended, relative to the build. The bars are color-coded by execution system. The majority of testpasses start within the first few hours — the perception of twelve-plus hours comes from a handful of late starters. Now we can ask the right question: why did *these* tests start late?
 
 ---
 
-## [3:05–3:30] Slide 4 — Impact & What's Next
+## [1:45–2:00] Live Demo — Dependency Deep Dive
 
-> This slide shows where we are and where we're headed. Today, we've already used these insights to identify optimizations that pull in test start times considerably. And any team can self-serve — pick a branch, pick a build, and see the full story.
->
-> Looking ahead, we're leveraging AI and this data to automatically analyze which dependency chains are the most frequent bottlenecks across many builds — moving from seeing the problem to predicting and preventing it. Our goal is that every team in Windows can understand and accelerate their test signal.
+> Clicking a late-starting testpass shows every chunk it depends on. The red-highlighted path is the critical dependency chain — the slowest sequence of artifacts that determined when this test could start. If we produce those artifacts sooner, this entire testpass starts earlier. Multiply that across dozens of similar bottlenecks and you see how targeted improvements translate directly into faster test signal.
 
 ---
 

@@ -4,9 +4,12 @@
   "description": "UTCT UX demo presentation and automation",
   "scripts": {
     "demo": "npx playwright test demo-automation.ts --headed",
-    "demo:debug": "npx playwright test demo-automation.ts --headed --debug"
+    "demo:debug": "npx playwright test demo-automation.ts --headed --debug",
+    "generate-voice": "node generate-voice.mjs"
   },
   "devDependencies": {
+    "@azure/identity": "^4.13.0",
+    "@azure/keyvault-secrets": "^4.10.0",
     "@playwright/test": "^1.52.0"
   }
 }

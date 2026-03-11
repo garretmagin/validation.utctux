@@ -9,16 +9,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg-primary: #0d1117;
-      --bg-card: #161b22;
-      --bg-accent: #1c2333;
-      --text-primary: #e6edf3;
-      --text-secondary: #8b949e;
-      --accent-blue: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-orange: #d29922;
-      --accent-purple: #bc8cff;
-      --accent-red: #f85149;
+      --bg-primary: #ffffff;
+      --bg-card: #f6f8fa;
+      --bg-accent: #eef1f5;
+      --text-primary: #1f2328;
+      --text-secondary: #656d76;
+      --accent-blue: #0969da;
+      --accent-green: #1a7f37;
+      --accent-orange: #bf8700;
+      --accent-purple: #8250df;
+      --accent-red: #cf222e;
+      --border-color: #d0d7de;
       --slide-transition: 0.8s ease-in-out;
     }
 
@@ -69,7 +70,7 @@
     /* ===== Slide: Title ===== */
     #slide-title {
       text-align: center;
-      background: radial-gradient(ellipse at center, #1a2332 0%, var(--bg-primary) 70%);
+      background: radial-gradient(ellipse at center, #e8f0fe 0%, var(--bg-primary) 70%);
     }
 
     #slide-title h1 {
@@ -98,7 +99,7 @@
 
     /* ===== Slide: Problem ===== */
     #slide-problem {
-      background: radial-gradient(ellipse at top left, #1f1215 0%, var(--bg-primary) 50%);
+      background: radial-gradient(ellipse at top left, #fde8e8 0%, var(--bg-primary) 50%);
     }
 
     .problem-layout {
@@ -139,7 +140,7 @@
       background: var(--bg-card);
       border-radius: 16px;
       padding: 32px;
-      border: 1px solid #30363d;
+      border: 1px solid var(--border-color);
       opacity: 0;
       transform: translateY(20px);
       transition: opacity 0.5s ease, transform 0.5s ease;
@@ -169,7 +170,7 @@
 
     /* ===== Slide: AI Story ===== */
     #slide-ai-story {
-      background: radial-gradient(ellipse at bottom right, #0d1f2d 0%, var(--bg-primary) 50%);
+      background: radial-gradient(ellipse at bottom right, #dbeafe 0%, var(--bg-primary) 50%);
     }
 
     .ai-layout {
@@ -234,13 +235,14 @@
       background: var(--accent-blue);
       border: 4px solid var(--bg-primary);
       margin-bottom: 20px;
+      box-sizing: content-box;
       z-index: 2;
-      box-shadow: 0 0 20px rgba(88, 166, 255, 0.4);
+      box-shadow: 0 0 12px rgba(9, 105, 218, 0.3);
     }
 
     .timeline-step:last-child .timeline-dot {
       background: var(--accent-green);
-      box-shadow: 0 0 20px rgba(63, 185, 80, 0.4);
+      box-shadow: 0 0 12px rgba(26, 127, 55, 0.3);
     }
 
     .timeline-step h3 {
@@ -280,140 +282,145 @@
       font-weight: 600;
     }
 
-    /* ===== Slide: Live Demo (iframe) ===== */
-    #slide-live-demo {
-      padding: 0;
+    /* ===== Slide: Case Study ===== */
+    #slide-case-study {
+      background: radial-gradient(ellipse at top right, #fef3c7 0%, var(--bg-primary) 50%);
     }
 
-    #slide-live-demo .demo-header {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 48px;
-      background: var(--bg-card);
-      border-bottom: 1px solid #30363d;
-      display: flex;
-      align-items: center;
-      padding: 0 24px;
-      gap: 12px;
-      z-index: 20;
-      opacity: 1;
-      transition: opacity 0.5s ease;
-    }
-
-    #slide-live-demo .demo-header.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .demo-header .dot { width: 12px; height: 12px; border-radius: 50%; }
-    .demo-header .dot.red { background: var(--accent-red); }
-    .demo-header .dot.yellow { background: var(--accent-orange); }
-    .demo-header .dot.green { background: var(--accent-green); }
-
-    .demo-header .url-bar {
-      flex: 1;
-      margin-left: 12px;
-      background: var(--bg-primary);
-      border-radius: 6px;
-      padding: 6px 16px;
-      font-size: 14px;
-      color: var(--text-secondary);
-      font-family: 'Cascadia Code', 'Consolas', monospace;
-    }
-
-    .demo-header .label {
-      font-size: 14px;
-      color: var(--accent-blue);
-      font-weight: 600;
-    }
-
-    #demo-iframe {
-      position: absolute;
-      top: 48px;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      width: 100%;
-      height: calc(100% - 48px);
-      border: none;
-    }
-
-    /* ===== Slide: Impact ===== */
-    #slide-impact {
-      background: radial-gradient(ellipse at center, #0d1f15 0%, var(--bg-primary) 50%);
-    }
-
-    .impact-layout {
+    .case-study-layout {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 48px;
+      gap: 40px;
       max-width: 1400px;
     }
 
-    .impact-layout h2 {
+    .case-study-layout h2 {
       font-size: 48px;
       font-weight: 600;
       text-align: center;
     }
 
-    .impact-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 32px;
-      width: 100%;
+    .case-study-layout h2 .highlight {
+      color: var(--accent-orange);
     }
 
-    .impact-card {
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 32px;
+      width: 100%;
+      align-items: center;
+    }
+
+    .before-after-card {
       background: var(--bg-card);
       border-radius: 16px;
-      padding: 36px;
-      border: 1px solid #30363d;
+      padding: 32px;
+      border: 1px solid var(--border-color);
       opacity: 0;
       transform: translateY(20px);
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
 
-    .impact-card.visible {
+    .before-after-card.visible {
       opacity: 1;
       transform: translateY(0);
     }
 
-    .impact-card.today { border-left: 4px solid var(--accent-green); }
-    .impact-card.next { border-left: 4px solid var(--accent-purple); }
+    .before-after-card.before { border-top: 4px solid var(--accent-red); }
+    .before-after-card.after { border-top: 4px solid var(--accent-green); }
 
-    .impact-card .badge {
-      display: inline-block;
+    .before-after-card .label {
       font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 1px;
-      padding: 4px 12px;
-      border-radius: 6px;
-      margin-bottom: 16px;
-    }
-
-    .impact-card.today .badge {
-      background: rgba(63, 185, 80, 0.15);
-      color: var(--accent-green);
-    }
-
-    .impact-card.next .badge {
-      background: rgba(188, 140, 255, 0.15);
-      color: var(--accent-purple);
-    }
-
-    .impact-card h3 {
-      font-size: 26px;
       margin-bottom: 12px;
     }
 
-    .impact-card p {
+    .before-after-card.before .label { color: var(--accent-red); }
+    .before-after-card.after .label { color: var(--accent-green); }
+
+    .before-after-card h3 {
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    .before-after-card p {
       font-size: 20px;
       line-height: 1.5;
       color: var(--text-secondary);
+    }
+
+    .before-after-arrow {
+      font-size: 48px;
+      color: var(--accent-green);
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .before-after-arrow.visible {
+      opacity: 1;
+    }
+
+    .case-study-detail {
+      font-size: 22px;
+      color: var(--text-secondary);
+      text-align: center;
+      line-height: 1.6;
+      max-width: 1100px;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+
+    .case-study-detail.visible {
+      opacity: 1;
+    }
+
+    .case-study-detail a {
+      color: var(--accent-blue);
+      text-decoration: none;
+    }
+
+    /* ===== Slide: Live Demo (transition) ===== */
+    #slide-live-demo {
+      background: radial-gradient(ellipse at center, #dbeafe 0%, var(--bg-primary) 50%);
+      text-align: center;
+    }
+
+    .demo-transition-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .demo-transition-layout h2 {
+      font-size: 48px;
+      font-weight: 600;
+    }
+
+    .demo-transition-layout .demo-url {
+      font-size: 28px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      color: var(--accent-blue);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 32px;
+      text-decoration: none;
+      transition: background 0.3s;
+    }
+
+    .demo-transition-layout .demo-url:hover {
+      background: var(--bg-accent);
+    }
+
+    .demo-transition-layout .demo-hint {
+      font-size: 22px;
+      color: var(--text-secondary);
+      font-weight: 300;
     }
 
     /* ===== Navigation Indicators ===== */
@@ -431,7 +438,7 @@
       width: 12px;
       height: 12px;
       border-radius: 50%;
-      background: #30363d;
+      background: var(--border-color);
       cursor: pointer;
       transition: background 0.3s, transform 0.3s;
     }
@@ -471,7 +478,7 @@
   <div class="slide active" id="slide-title" data-slide="0">
     <h1>UTCT UX</h1>
     <div class="subtitle">Visualizing Windows Test Execution to Accelerate Signal</div>
-    <div class="byline">FHL 2026 &nbsp;·&nbsp; Garret Magin &nbsp;·&nbsp; ES Validation</div>
+    <div class="byline">FHL 2026 &nbsp;·&nbsp; Garret Magin &nbsp;·&nbsp; Windows ES Validation</div>
   </div>
 
   <!-- ===== SLIDE 1: The Problem ===== -->
@@ -484,8 +491,8 @@
       <div class="problem-points">
         <div class="problem-card" data-delay="0">
           <div class="icon">🔍</div>
-          <h3>No Visibility</h3>
-          <p>There was no tool to see when tests actually start and finish relative to a build. Teams were guessing.</p>
+          <h3>No Visualization</h3>
+          <p>We had the data and regularly tracked aggregate metrics and delivery impact — but no way to visualize the timeline of individual test execution relative to a build.</p>
         </div>
         <div class="problem-card" data-delay="1">
           <div class="icon">❓</div>
@@ -494,8 +501,8 @@
         </div>
         <div class="problem-card" data-delay="2">
           <div class="icon">🎯</div>
-          <h3>Can't Optimize Blind</h3>
-          <p>Without data showing the real shape of test execution, optimization efforts are unfocused and unmeasurable.</p>
+          <h3>Finding the Right Targets</h3>
+          <p>We can measure what we optimize, but visualization helps direct us to the long poles that impact customers most in making their code flow decisions.</p>
         </div>
       </div>
     </div>
@@ -508,73 +515,58 @@
       <div class="timeline">
         <div class="timeline-step" data-delay="0">
           <div class="timeline-dot"></div>
-          <div class="time-label">Day 1–2</div>
+          <div class="time-label">Day 1</div>
           <h3>Prototype</h3>
-          <p>GitHub Copilot helped build a Gantt chart prototype in 2 days</p>
+          <p>GitHub Copilot helped build a Gantt chart prototype in a day</p>
         </div>
         <div class="timeline-step" data-delay="1">
           <div class="timeline-dot"></div>
           <div class="time-label">Week 1</div>
-          <h3>Demand</h3>
-          <p>Teams immediately wanted to generate charts for their own branches</p>
+          <h3>Demand &amp; Deploy</h3>
+          <p>ES engineers immediately wanted it for investigating customer builds — stood up a shared web service in a week</p>
         </div>
         <div class="timeline-step" data-delay="2">
-          <div class="timeline-dot"></div>
-          <div class="time-label">Week 2</div>
-          <h3>Web App</h3>
-          <p>Evolved into a shared tool — deployed to Azure, available to everyone</p>
-        </div>
-        <div class="timeline-step" data-delay="3">
           <div class="timeline-dot" style="background: var(--accent-green);"></div>
           <div class="time-label">FHL Week</div>
           <h3>Enhanced</h3>
-          <p>Dependency analysis, critical path visualization, rerun detection</p>
+          <p>Polished the experience, added dependency analysis, critical path visualization, and rerun detection</p>
         </div>
       </div>
-      <div class="ai-bottom-message" data-delay="4">
+      <div class="ai-bottom-message" data-delay="3">
         AI kept the focus on <strong>solving the problem</strong>, not building infrastructure.
       </div>
     </div>
   </div>
 
-  <!-- ===== SLIDE 3: Live Demo (iframe) ===== -->
-  <div class="slide" id="slide-live-demo" data-slide="3">
-    <div class="demo-header">
-      <span class="dot red"></span>
-      <span class="dot yellow"></span>
-      <span class="dot green"></span>
-      <span class="url-bar">https://ux.utct.dev</span>
-      <span class="label">LIVE DEMO</span>
-    </div>
-    <iframe id="demo-iframe" src="about:blank"></iframe>
-  </div>
-
-  <!-- ===== SLIDE 4: Impact & What's Next ===== -->
-  <div class="slide" id="slide-impact" data-slide="4">
-    <div class="impact-layout">
-      <h2>Impact &amp; What's Next</h2>
-      <div class="impact-grid">
-        <div class="impact-card today" data-delay="0">
-          <span class="badge">✅ Today</span>
-          <h3>Tests Starting Faster</h3>
-          <p>Data-driven identification of dependency bottlenecks has enabled optimizations that pull in test start times considerably.</p>
+  <!-- ===== SLIDE 3: Case Study ===== -->
+  <div class="slide" id="slide-case-study" data-slide="3">
+    <div class="case-study-layout">
+      <h2>First Discovery: A <span class="highlight">24-Hour</span> Testpass</h2>
+      <div class="before-after">
+        <div class="before-after-card before" data-delay="0">
+          <div class="label">Before</div>
+          <h3>Device Pool Bottleneck</h3>
+          <p>One testpass was running up to 24 hours — not because of test complexity, but because a dedicated device pool lacked capacity, causing massive queuing delays.</p>
         </div>
-        <div class="impact-card today" data-delay="1">
-          <span class="badge">✅ Today</span>
-          <h3>Self-Service for Every Team</h3>
-          <p>Any team can pick a branch, pick a build, and instantly see the full execution story — no requests, no waiting.</p>
-        </div>
-        <div class="impact-card next" data-delay="2">
-          <span class="badge">🔜 Next</span>
-          <h3>AI-Powered Bottleneck Analysis</h3>
-          <p>Leveraging AI and this data to automatically identify which dependency chains are the most frequent blockers across builds.</p>
-        </div>
-        <div class="impact-card next" data-delay="3">
-          <span class="badge">🔜 Next</span>
-          <h3>Automated Recommendations</h3>
-          <p>Moving from <em>seeing</em> the problem to <em>predicting</em> and <em>preventing</em> it — accelerating test signal org-wide.</p>
+        <div class="before-after-arrow" data-delay="1">→</div>
+        <div class="before-after-card after" data-delay="2">
+          <div class="label">After</div>
+          <h3>General Automation Pool</h3>
+          <p>Moved the AutoPlus testpasses to a standard shared automation pool with available capacity. The bottleneck disappeared.</p>
         </div>
       </div>
+      <div class="case-study-detail" data-delay="3">
+        The visualization made it obvious — one bar stretched across the entire chart. Without it, this would have stayed hidden in aggregate metrics.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 3: Live Demo (transition) ===== -->
+  <div class="slide" id="slide-live-demo" data-slide="3">
+    <div class="demo-transition-layout">
+      <h2>Live Demo</h2>
+      <a class="demo-url" href="https://ux.utct.dev" target="_blank" rel="noopener">https://ux.utct.dev</a>
+      <div class="demo-hint">Opens in a new tab — switch to it for the live walkthrough</div>
     </div>
   </div>
 
@@ -620,12 +612,9 @@
     // Trigger slide-specific animations
     animateSlideElements(next);
 
-    // Load iframe when entering live demo slide
+    // Open live site in new tab when entering demo slide
     if (index === 3) {
-      const iframe = document.getElementById('demo-iframe');
-      if (iframe.src === 'about:blank') {
-        iframe.src = DEMO_URL;
-      }
+      window.open(DEMO_URL, '_blank');
     }
   }
 
@@ -661,9 +650,7 @@
     next: () => goToSlide(currentSlide + 1),
     prev: () => goToSlide(currentSlide - 1),
     goTo: (i) => goToSlide(i),
-    getIframe: () => document.getElementById('demo-iframe'),
-    hideHeader: () => document.querySelector('.demo-header')?.classList.add('hidden'),
-    showHeader: () => document.querySelector('.demo-header')?.classList.remove('hidden'),
+    openDemo: () => window.open(DEMO_URL, '_blank'),
   };
 </script>
 

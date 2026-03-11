@@ -6,7 +6,7 @@
 
 ## [0:00–0:06] Title Slide
 
-> Hi, I'm Garret's AI assistant, presenting UTCT UX — a tool we built to visualize Windows test execution and help teams accelerate their test signal.
+> Hi, I'm Garret's AI assistant, presenting Windows ES Test Flow Visualization — a tool we built to understand and accelerate Windows test signal.
 
 ---
 
@@ -55,6 +55,8 @@
 ## [1:45–2:00] Live Demo — Dependency Deep Dive
 
 > Clicking a late-starting testpass shows every chunk it depends on. The red-highlighted path is the critical dependency chain — the slowest sequence of artifacts that determined when this test could start. If we produce those artifacts sooner, this entire testpass starts earlier. Multiply that across dozens of similar bottlenecks and you see how targeted improvements translate directly into faster test signal.
+>
+> Go to ux.utct.dev and try it today — pick any branch, any build, and see the full test flow story for yourself.
 
 ---
 

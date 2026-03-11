@@ -37,12 +37,12 @@ const EDGE_USER_DATA_DIR = path.join(
 const TIMING = {
   titleHold: 9000,           // [0:00–0:09]
   problemSlideHold: 30000,   // [0:09–0:39]
-  aiStoryHold: 27000,        // [0:39–1:06]
-  caseStudyHold: 18000,      // [1:06–1:24]
-  transitionPause: 6000,     // [1:24–1:30]
-  buildSelectTime: 15000,    // [1:30–1:45]
-  ganttChartHold: 20000,     // [1:45–2:05]
-  dependencyDive: 15000,     // [2:05–2:20]
+  aiStoryHold: 24000,        // [0:39–1:02]
+  caseStudyHold: 25000,      // [1:02–1:27]
+  transitionPause: 6000,     // [1:27–1:33]
+  buildSelectTime: 15000,    // [1:33–1:48]
+  ganttChartHold: 20000,     // [1:48–2:08]
+  dependencyDive: 15000,     // [2:08–2:23]
 };
 
 // ===== Helpers =====

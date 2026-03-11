@@ -7,7 +7,7 @@
 
     <!-- [0:00–0:06] Title Slide -->
     <prosody rate="30%" pitch="0%">
-      Hi, I'm Garret's A I assistant, presenting U T C T U X <break time="300ms"/> — a tool we built to visualize Windows test execution and help teams accelerate their test signal.
+      Hi, I'm Garret's A I assistant, presenting Windows E S Test Flow Visualization <break time="300ms"/> — a tool we built to understand and accelerate Windows test signal.
     </prosody>
     <break time="800ms"/>
 
@@ -21,7 +21,7 @@
     <prosody rate="30%">
       Three challenges. First, no visualization — we had the data and aggregate metrics, but no way to see the timeline of individual test execution relative to a build.
       <break time="200ms"/>
-      Second, the question — is the bottleneck test <emphasis level="moderate">runtime</emphasis>, or <emphasis level="moderate">waiting</emphasis> for build artifacts?
+      Second, the cause — is the bottleneck test <emphasis level="moderate">runtime</emphasis>, or <emphasis level="moderate">waiting</emphasis> for build artifacts?
       <break time="200ms"/>
       And third, the visualization helps direct us to the long poles that impact customers most in making their code flow decisions.
     </prosody>
@@ -31,7 +31,7 @@
     <prosody rate="30%">
       With GitHub Copilot as a development partner, we had a working Gantt chart prototype in <emphasis level="strong">a single day</emphasis>.
       <break time="200ms"/>
-      After showing it to ES engineers, the demand was immediate — they wanted it for investigating customer builds. Within a week we stood up a shared web service at <prosody rate="-10%">u x dot u t c t dot dev</prosody>.
+      After showing it to ES engineers, the demand was immediate — they wanted it for investigating customer builds. Within a week we stood up a shared web service.
       <break time="200ms"/>
       During F H L week, we polished the experience and added dependency analysis, critical-path visualization, and rerun detection.
     </prosody>
@@ -59,7 +59,7 @@
 
     <!-- [1:04–1:10] Transition to Live Demo -->
     <prosody rate="30%">
-      Let me show you what the experience looks like for a different example. This is the live site at <prosody rate="-10%">u x dot u t c t dot dev</prosody>.
+      Let me show you what the experience looks like for a different example. Here is the live version of our new site.
     </prosody>
     <break time="1000ms"/>
 
@@ -82,6 +82,12 @@
       Clicking a late-starting testpass shows every chunk it depends on. The red-highlighted path is the critical dependency chain.
       <break time="200ms"/>
       If we produce those artifacts sooner, this entire testpass starts earlier. Multiply that across dozens of similar bottlenecks and you see how <emphasis level="strong">targeted improvements</emphasis> translate directly into <emphasis level="strong">faster test signal</emphasis>.
+    </prosody>
+    <break time="500ms"/>
+
+    <!-- Call to Action -->
+    <prosody rate="30%">
+      Try it today — pick any branch, any build, and see the full test flow story for yourself. Go to u x <break time="50ms"/><phoneme alphabet="ipa" ph="dɒt">dot</phoneme><break time="50ms"/>  u t c t <break time="50ms"/><phoneme alphabet="ipa" ph="dɒt">dot</phoneme><break time="50ms"/> dev.
     </prosody>
 
   </voice>
